@@ -1,4 +1,4 @@
-const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys')
+const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, DisconnectReason } = require('@whiskeysockets/baileys')
 const P = require('pino')
 
 async function iniciar() {
@@ -7,7 +7,7 @@ async function iniciar() {
 
   const sock = makeWASocket({
     version,
-    printQRInTerminal: true,
+    printQRInTerminal: true, // Mostra o QR Code no terminal
     auth: state,
     logger: P({ level: 'silent' })
   })
@@ -16,6 +16,7 @@ async function iniciar() {
 
   sock.ev.on("connection.update", (update) => {
     const { connection, lastDisconnect } = update
+    console.log(update); // Log de depuração
     if (connection === "close") {
       const shouldReconnect = (lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut
       if (shouldReconnect) {
