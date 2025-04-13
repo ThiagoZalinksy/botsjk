@@ -12,6 +12,20 @@ let lavagemAtiva = null;
 function formatarHorario(data) {
   return data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
+// Parte 1
+const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, DisconnectReason } = require('@whiskeysockets/baileys');
+const P = require('pino');
+const fs = require('fs');
+const path = require('path');
+const moment = require("moment-timezone");
+const axios = require('axios');
+
+let usuariosNaFila = [];
+let lavagemAtiva = null;
+
+function formatarHorario(data) {
+  return data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
 // Parte 2
 async function iniciar() {
     const { state, saveCreds } = await useMultiFileAuthState('auth');
@@ -41,7 +55,15 @@ sock.ev.on('messages.upsert', async ({ messages }) => {
 
     if (!msg.message || msg.key.fromMe) return;
 
-    const texto = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+    let texto = '';
+    if (msg.message?.conversation) {
+      texto = msg.message.conversation;
+    } else if (msg.message?.extendedTextMessage) {
+      texto = msg.message.extendedTextMessage.text;
+    } else if (msg.message?.imageMessage?.caption) {
+      texto = msg.message.imageMessage.caption;
+    }
+
     const nomeUsuario = msg.pushName || "usuário";
     const agora = moment().tz("America/Sao_Paulo");
     const horaAtual = agora.format("HH:mm");
@@ -68,36 +90,32 @@ if (texto === '1') {
   } else if (texto === '3') {
     const agora = moment().tz("America/Sao_Paulo");
     const fim = agora.clone().add(2, 'hours');
-  
+
     lavagemAtiva = {
       usuario: nomeUsuario,
       numero: remetente,
       inicio: agora.toDate(),
       fim: fim.toDate()
     };
-  
+
     await sock.sendMessage(remetente, {
       text: `🧺 Lavagem iniciada às ${formatarHorario(agora.toDate())}.\n⏱️ Finaliza às ${formatarHorario(fim.toDate())}.\n⛔ Tempo máximo: 2 horas.`
     });
-  
+
     setTimeout(async () => {
       await sock.sendMessage(remetente, {
         text: `🔔 @${remetente.split("@")[0]} sua lavagem vai finalizar em 5 minutos.`,
         mentions: [remetente]
       });
     }, 1.55 * 60 * 60 * 1000);
-  
-    const hora = agora.hour(); // CORREÇÃO AQUI
-  
+
+    const hora = agora.hour();
     if (hora >= 20) {
       await sock.sendMessage(remetente, {
         text: `⚠️ Essa é a última lavagem do dia, ${nomeUsuario}. A lavanderia fecha às 22h.`
       });
     }
-  }
-  
-      
-   else if (texto === '4') {
+  } else if (texto === '4') {
     if (!lavagemAtiva) {
       await sock.sendMessage(remetente, {
         text: `🔔 Não há nenhuma lavagem ativa no momento.`
@@ -107,7 +125,7 @@ if (texto === '1') {
 
     if (lavagemAtiva.numero !== remetente) {
       await sock.sendMessage(remetente, {
-        text: `⚠️ A máquina está em uso por *${lavagemAtiva.usuario}*.\n${nomeUsuario} deseja utilizar, mas *${lavagemAtiva.usuario}* ainda não finalizou.`
+        text: `⚠️ A máquina está em uso por *${lavagemAtiva.usuario}*.`
       });
       return;
     }
@@ -123,7 +141,6 @@ if (texto === '1') {
       await sock.sendMessage(proximo.numero, {
         text: `🚨 Olá ${proximo.nome}, a máquina está liberada para você utilizar.`
       });
-
       await sock.sendMessage(remetente, {
         text: `📣 ${proximo.nome} foi avisado que pode usar a máquina agora.`
       });
@@ -134,7 +151,6 @@ else if (texto === '5') {
     if (!global.usuariosNaFila) global.usuariosNaFila = [];
 
     const posicao = global.usuariosNaFila.findIndex(u => u.numero === remetente);
-
     if (posicao === -1) {
       global.usuariosNaFila.push({ nome: nomeUsuario, numero: remetente, hora: new Date() });
 
@@ -150,18 +166,15 @@ else if (texto === '5') {
       }
 
       await sock.sendMessage(remetente, {
-        text: `📍 Olá @${remetente.split("@")[0]}, você já está na fila!\n🪪 Sua posição: *${posicao + 1}º* de ${global.usuariosNaFila.length} pessoas.\n⏳ Tempo estimado restante: ${tempoRestante} minutos.`,
+        text: `📍 Olá @${remetente.split("@")[0]}, você já está na fila!\n🪪 Sua posição: *${posicao + 1}º*.\n⏳ Tempo estimado: ${tempoRestante} min.`,
         mentions: [remetente]
       });
     }
 
-    // Nova funcionalidade: hora atual
     await sock.sendMessage(remetente, {
       text: `⏰ A hora atual no Brasil é: *${horaAtual}*`
     });
-  }
-// Parte 8
-else if (texto === '6') {
+  } else if (texto === '6') {
     const index = usuariosNaFila.findIndex(u => u.numero === remetente);
     if (index === -1) {
       await sock.sendMessage(remetente, {
@@ -174,7 +187,7 @@ else if (texto === '6') {
       });
     }
   } else if (texto === '7') {
-    const roupas = [ /* lista de roupas */ ];
+    const roupas = [ /* mesma lista */ ];
     let combinacao = [];
     let pesoTotal = 0;
 
@@ -188,34 +201,37 @@ else if (texto === '6') {
 
     let resposta = `🎲 *Sorteio de Lavagem*:\n\n`;
     combinacao.forEach(r => resposta += `• ${r.nome} (${r.peso.toFixed(2)}kg)\n`);
-    resposta += `\n📦 Peso total estimado: *${pesoTotal.toFixed(2)}kg*\n⚠️ Não ultrapasse o limite de 8kg.`;
+    resposta += `\n📦 Peso total estimado: *${pesoTotal.toFixed(2)}kg*`;
 
     await sock.sendMessage(remetente, { text: resposta });
-  } else if (texto === '8') {
+  }
+// Parte 8
+else if (texto === '8') {
     await sock.sendMessage(remetente, {
-      text: `🕒 Horário de funcionamento: 07h às 22h\n\n⚠️ Não é permitido iniciar lavagem após as 22h.`
+      text: `🕒 Horário de funcionamento: 07h às 22h`
     });
   } else if (texto === '9') {
-    const weatherUrl = `https://api.hgbrasil.com/weather?key=c657e670&city_name=Viamão,RS`;
     try {
-      const { data } = await axios.get(weatherUrl);
+      const { data } = await axios.get(`https://api.hgbrasil.com/weather?key=c657e670&city_name=Viamão,RS`);
       const info = data.results;
       await sock.sendMessage(remetente, {
-        text: `🌦️ *Previsão do tempo para Viamão, RS:*\n\n📅 Data: ${info.date}\n📍 Descrição: ${info.description}\n🌡️ Temperatura: ${info.temp}ºC\n💧 Umidade: ${info.humidity}%`
+        text: `🌦️ *Previsão para Viamão, RS:*\n📅 ${info.date}\n🌡️ ${info.temp}°C\n💧 Umidade: ${info.humidity}%`
       });
     } catch {
-      await sock.sendMessage(remetente, {
-        text: `❌ Não foi possível obter a previsão do tempo.`
-      });
+      await sock.sendMessage(remetente, { text: `❌ Não foi possível obter a previsão.` });
     }
   } else if (texto === '10') {
     await sock.sendMessage(remetente, {
-      text: `🚛 *Dias de Coleta de Lixo* 🚛\n\n🗑️ Dias: Terça, Quinta e Sábado\n♻️ Separe seu lixo corretamente.`
+      text: `🚛 *Dias de coleta de lixo:* Terça, Quinta e Sábado`
+    });
+  } else if (texto.toLowerCase() === 'menu' || texto.toLowerCase() === 'iniciar') {
+    await sock.sendMessage(remetente, {
+      text: `📋 *Menu de opções:*\n1 - Dicas\n2 - Info Lavadora\n3 - Iniciar lavagem\n4 - Finalizar\n5 - Entrar na fila\n6 - Sair da fila\n7 - Sortear roupas\n8 - Horário\n9 - Tempo\n10 - Lixo`
     });
   }
-}); // fim do sock.ev.on('messages.upsert')
-} // fim do if connection === 'open'
-}); // fim do sock.ev.on('connection.update')
-}
+}); // fim de messages.upsert
 // Parte 9
+} // fim do if connection === 'open'
+}); // fim de connection.update
+// Parte 10
 iniciar();
