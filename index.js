@@ -44,19 +44,23 @@ async function iniciar() {
 
 
 
-//Parte 4 — Monitoramento da conexão (conectado / desconectado)
+// Parte 4 — Monitoramento da conexão (conectado / desconectado)
 sock.ev.on("connection.update", (update) => {
   const { connection, lastDisconnect } = update;
 
   if (connection === "close") {
-    const shouldReconnect =
-      lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-    console.log("⚠️ Conexão encerrada. Reconectar?", shouldReconnect);
+    const statusCode = lastDisconnect?.error?.output?.statusCode;
+    const shouldReconnect = statusCode !== DisconnectReason.loggedOut && statusCode !== 428;
+
+    console.log(`⚠️ Conexão encerrada. Código: ${statusCode} — Reconectar?`, shouldReconnect);
+
     if (shouldReconnect) iniciar();
+    else console.log("❌ Não será reconectado. Verifique o QR ou o token.");
   } else if (connection === "open") {
     console.log("✅ Bot conectado com sucesso!");
   }
 });
+
 
 
 
