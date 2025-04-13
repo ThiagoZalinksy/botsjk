@@ -217,7 +217,8 @@ if (texto === "1") {
     filaDeEspera.push(remetente);
     const posicao = filaDeEspera.indexOf(remetente) + 1;
     const esperaHoras = posicao * 2;
-  
+    const usuarioId = msg.key.participant || remetente;
+    const nomeUsuario = '@' + usuarioId.split('@')[0];
     await enviar({
       text: `📝 {nomeUsuario}\nVocê foi adicionado à fila!\n🔢 Posição: ${posicao}\n🕒 Tempo estimado: ~${esperaHoras} hora(s).`
     });
