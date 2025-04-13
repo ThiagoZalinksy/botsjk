@@ -132,11 +132,9 @@ if (texto === "1") {
 
     const saudacao = obterSaudacao(agora.hour());
 
-    // Defina o nome do usuário aqui
+    // Obtendo o nome do usuário
     const nomeUsuario = '@' + remetente.split('@')[0];  // Exemplo: @120363403328696553
-
-    // Defina o identificador de menção com o número completo
-    const usuarioId = remetente;
+    const usuarioId = remetente;  // Garantindo que usamos a ID do usuário completa, sem o @g.us
 
     lavagemAtiva = {
         usuario: nomeUsuario,
@@ -148,18 +146,17 @@ if (texto === "1") {
     // Enviar a mensagem mencionando o usuário
     await enviar({
         text: `${saudacao} ${nomeUsuario} ! 🧺 Lavagem iniciada às ${formatarHorario(agora)}.\n⏱️ Termina às ${formatarHorario(fim)}`,
-        mentions: [usuarioId]  // Aqui menciona pelo número completo
+        mentions: [usuarioId]  // Usando o ID completo do remetente, sem '@g.us'
     });
 
     setTimeout(async () => {
         // Enviar notificação de término
         await enviar({
             text: `🔔 ${nomeUsuario}, sua lavagem vai finalizar em 5 minutos.`,
-            mentions: [usuarioId]  // Novamente, menciona pelo número completo
+            mentions: [usuarioId]  // Novamente, mencionando pelo ID completo
         });
     }, 1.55 * 60 * 60 * 1000); // 1 hora e 33 minutos
-
-
+  
 
 } else if (texto === "4") {
     if (!lavagemAtiva || lavagemAtiva.numero !== remetente) {
