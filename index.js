@@ -217,7 +217,8 @@ async function iniciar() {
     }
   }); // fim de messages.upsert
 // Parte 9
-    } // fim do if connection === 'open'
-  }); // fim de connection.update
+     }); // fim de connection.update
+} // fim da função iniciar()
+
 // Parte 10
 iniciar();
