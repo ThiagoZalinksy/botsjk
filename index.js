@@ -220,13 +220,13 @@ if (texto === "1") {
   const usuarioId = msg.key.participant || remetente;
   const nomeUsuario = '@' + usuarioId.split('@')[0];
 
-  if (lavagemAtiva && lavagemAtiva.numero === remetente) {
-    await enviar({
-      text: `⚠️ ${nomeUsuario}, você já está usando o sistema de lavagem.`,
-      mentions: [usuarioId]
-    });
-    return;
-  }
+  //if (lavagemAtiva && lavagemAtiva.numero === remetente) {
+    //await enviar({
+     // text: `⚠️ ${nomeUsuario}, você já está usando o sistema de lavagem.`,
+     // mentions: [usuarioId]
+   // });
+    //return;
+ // }
 
   if (lavagemAtiva && lavagemAtiva.numero !== remetente) {
     const agora = moment.tz("America/Sao_Paulo");
