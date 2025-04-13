@@ -171,12 +171,12 @@ if (texto === "1") {
     const duracao = moment.duration(fimLavagem.diff(moment(lavagemAtiva.inicio)));
     const duracaoStr = `${duracao.hours()}h ${duracao.minutes()}min`;
   
-    let resposta = `✅ Lavagem finalizada!\n🕒 Duração: ${duracaoStr}\n`;
+    let resposta = `✅ Lavagem finalizada!\nNome:{nomeUsuario} \n 🕒 Duração: ${duracaoStr}\n`;
   
     if (duracao.asHours() > 2) {
-      resposta += `⚠️ Tempo ultrapassado! Tente ser mais pontual da próxima vez.`;
+      resposta += `⚠️ Tempo ultrapassado! \n {nomeUsuario} \nTente ser mais pontual da próxima vez.`;
     } else {
-      resposta += `🎉 Bom trabalho! Você concluiu dentro do tempo.`;
+      resposta += `🎉 Bom trabalho! \n{nomeUsuario}\n Você concluiu dentro do tempo.`;
     }
   
     await enviar({ text: resposta, mentions: [remetente] });
@@ -218,7 +218,7 @@ if (texto === "1") {
     const esperaHoras = posicao * 2;
   
     await enviar({
-      text: `📝 Você foi adicionado à fila!\n🔢 Posição: ${posicao}\n🕒 Tempo estimado: ~${esperaHoras} hora(s).`
+      text: `📝 {nomeUsuario}\nVocê foi adicionado à fila!\n🔢 Posição: ${posicao}\n🕒 Tempo estimado: ~${esperaHoras} hora(s).`
     });
   }
 
@@ -229,7 +229,7 @@ else if (texto === "6") {
     const indice = filaDeEspera.indexOf(remetente);
   
     if (indice === -1) {
-      await enviar({ text: `❌ Você não está na fila.` });
+      await enviar({ text: `❌ Você 🫵🏻 não está na fila.` });
       return;
     }
   
