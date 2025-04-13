@@ -208,6 +208,24 @@ if (texto === "1") {
     return;
   }
 
+  if (lavagemAtiva && lavagemAtiva.numero !== remetente) {
+    const agora = moment.tz("America/Sao_Paulo");
+    const fim = moment(lavagemAtiva.fim);
+    const duracaoRestante = moment.duration(fim.diff(agora));
+    const minutosRestantes = duracaoRestante.asMinutes();
+    
+    const restanteStr =
+      minutosRestantes <= 0
+        ? "a lavagem está prestes a terminar."
+        : `faltam aproximadamente ${Math.floor(duracaoRestante.asHours())}h ${duracaoRestante.minutes()}min para finalizar.`;
+
+    await enviar({
+      text: `⏳ A máquina já está sendo usada por ${lavagemAtiva.usuario}.\n🕒 ${restanteStr}`,
+      mentions: [lavagemAtiva.usuario.replace("@", "") + "@s.whatsapp.net"]
+    });
+    return;
+  }
+
   if (filaDeEspera.includes(remetente)) {
     const posicao = filaDeEspera.indexOf(remetente) + 1;
     const esperaHoras = posicao * 2;
@@ -234,6 +252,7 @@ if (texto === "1") {
     mentions: [usuarioId]
   });
 }
+
 
 //Parte 8 — Gerenciamento da fila (comandos 5, 6)
 
