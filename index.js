@@ -133,8 +133,11 @@ if (texto === "1") {
     const saudacao = obterSaudacao(agora.hour());
 
     // Obtendo o nome do usuário
-    const nomeUsuario = '@' + remetente.split('@')[0];  // Exemplo: @120363403328696553
-    const usuarioId = remetente;  // Garantindo que usamos a ID do usuário completa, sem o @g.us
+// Se a mensagem for de um grupo, pega o número do participante que enviou (ex: 5511999999999@s.whatsapp.net).
+// Se for de um chat privado, usa o próprio remetente como ID.
+    const usuarioId = msg.key.participant || remetente;
+// Formata o nome para menção usando "@" + o número do usuário (ex: @5511999999999)
+    const nomeUsuario = '@' + usuarioId.split('@')[0];
 
     lavagemAtiva = {
         usuario: nomeUsuario,
