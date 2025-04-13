@@ -170,7 +170,8 @@ if (texto === "1") {
     const fimLavagem = moment.tz("America/Sao_Paulo");
     const duracao = moment.duration(fimLavagem.diff(moment(lavagemAtiva.inicio)));
     const duracaoStr = `${duracao.hours()}h ${duracao.minutes()}min`;
-  
+  const usuarioId = msg.key.participant || remetente;
+  const nomeUsuario = '@' + usuarioId.split('@')[0];
     let resposta = `✅ Lavagem finalizada!\nNome:{nomeUsuario} \n 🕒 Duração: ${duracaoStr}\n`;
   
     if (duracao.asHours() > 2) {
