@@ -87,11 +87,14 @@ await sock.sendMessage(remetente, {
         });
       }, 1.55 * 60 * 60 * 1000);
       
-      if (agora.format("HH:mm") >= "20:00") {
-        await sock.sendMessage(remetente, {
-          text: `⚠️ Essa é a última lavagem do dia, ${nomeUsuario}. A lavanderia fecha às 22h.`
-        });
-      }
+      const hora = agora.getHours();
+
+if (hora >= 20) {
+  await sock.sendMessage(remetente, {
+    text: `⚠️ Essa é a última lavagem do dia, ${nomeUsuario}. A lavanderia fecha às 22h.`
+  });
+}
+
       
   } else if (texto === '4') {
     if (!lavagemAtiva) {
