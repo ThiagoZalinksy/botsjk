@@ -44,22 +44,25 @@ async function iniciar() {
 
 
 
-// Parte 4 — Monitoramento da conexão (conectado / desconectado)
+const DisconnectReason = require("@whiskeysockets/baileys").DisconnectReason;
+
+// Parte 4 — Monitoramento da conexão
 sock.ev.on("connection.update", (update) => {
   const { connection, lastDisconnect } = update;
 
   if (connection === "close") {
     const statusCode = lastDisconnect?.error?.output?.statusCode;
-    const shouldReconnect = statusCode !== DisconnectReason.loggedOut && statusCode !== 428;
+    const shouldReconnect = statusCode !== DisconnectReason.loggedOut && statusCode !== 428 && statusCode !== 440;
 
     console.log(`⚠️ Conexão encerrada. Código: ${statusCode} — Reconectar?`, shouldReconnect);
 
     if (shouldReconnect) iniciar();
-    else console.log("❌ Não será reconectado. Verifique o QR ou o token.");
+    else console.log("❌ Não será reconectado. Verifique a sessão ou o QR.");
   } else if (connection === "open") {
     console.log("✅ Bot conectado com sucesso!");
   }
 });
+
 
 
 
