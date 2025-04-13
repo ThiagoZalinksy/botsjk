@@ -117,26 +117,39 @@ if (texto === "1") {
   await enviar({ text: "🧾 *Informações tecnicas da lavadora* \nLavadora de Roupas Electrolux\nCapacidade: 8,5Kg \nModelo: LT09E Top Load Turbo Agitação Super\nProgramas de Lavagem: 9\nNíveis de Água: 4\nCor: Branca\n*CARACTERÍSTICAS*\nCapacidade (kg de roupas): 8,5Kg\nAcesso ao cesto: Superior\nÁgua quente: Não\nEnxágues: 1\nCentrifugação: Sim \nDispenser para sabão: Sim\nDispenser para amaciante: Sim\nDispenser para alvejante: Sim\nElimina fiapos: Sim - através do filtro\nNíveis de água: Extra, Baixo, Médio, Alto\nESPECIFICAÇÕES TÉCNICAS\nConsumo: (kWh) 0,25kWh/ciclo\nControles: Eletromecânicos\nVelocidade de centrifugação: (rpm) 660\nTensão/Voltagem: 220V\nAcabamento do cesto: Polipropileno\nConsumo de Energia: A (menos 25% de consumo)\nConsumo de água: 112 litros por ciclo\nEficiência Energética: A" });
 } else if (texto === "3") {
     const agora = moment().tz("America/Sao_Paulo");
-     const fim = agora.clone().add(2, "hours");
+    const fim = agora.clone().add(2, "hours");
 
-lavagemAtiva = {
-  usuario: nomeUsuario,
-  numero: remetente,
-  inicio: agora.toDate(),
-  fim: fim.toDate()
-};
+    // Função para determinar a saudação
+    const obterSaudacao = (hora) => {
+        if (hora >= 7 && hora < 12) {
+            return "Bom dia";
+        } else if (hora >= 12 && hora < 18) {
+            return "Boa tarde";
+        } else {
+            return "Boa noite";
+        }
+    };
 
-await enviar({
-  text: `🧺 Lavagem iniciada às ${formatarHorario(agora)}.\n⏱️ Termina às ${formatarHorario(fim)}`
-});
+    const saudacao = obterSaudacao(agora.hour());
 
-  
+    lavagemAtiva = {
+        usuario: nomeUsuario,
+        numero: remetente,
+        inicio: agora.toDate(),
+        fim: fim.toDate()
+    };
+
+    await enviar({
+        text: `${saudacao} @${remetente.split("@")[0]}! 🧺 Lavagem iniciada às ${formatarHorario(agora)}.\n⏱️ Termina às ${formatarHorario(fim)}`
+    });
+
     setTimeout(async () => {
-      await enviar({
-        text: `🔔 @${remetente.split("@")[0]} sua lavagem vai finalizar em 5 minutos.`,
-        mentions: [remetente]
-      });
+        await enviar({
+            text: `🔔 @${remetente.split("@")[0]} sua lavagem vai finalizar em 5 minutos.`,
+            mentions: [remetente]
+        });
     }, 1.55 * 60 * 60 * 1000); // 1 hora e 33 minutos
+}
   
 } else if (texto === "4") {
     if (!lavagemAtiva || lavagemAtiva.numero !== remetente) {
