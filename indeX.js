@@ -61,6 +61,26 @@ sock.ev.on("connection.update", (update) => {
   }
 });
 
+// ✅ Parte nova — Boas-vindas em grupos
+sock.ev.on("group-participants.update", async (update) => {
+  const { id, participants, action } = update;
+
+  if (action === "add") {
+    for (let participante of participants) {
+      const numero = participante.split("@")[0];
+      const contato = await sock.onWhatsApp(participante);
+      const nomeUsuario = contato?.[0]?.notify || `@${numero}`;
+
+      await sock.sendMessage(id, {
+        text: `👋 Olá ${nomeUsuario}, seja bem-vindo(a) ao grupo da lavanderia!\nDigite *Menu* para ver as opções disponíveis.`,
+        mentions: [participante],
+      });
+    }
+  }
+});
+
+
+
 
 
 
