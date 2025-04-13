@@ -1,17 +1,4 @@
-// Parte 1
-const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, DisconnectReason } = require('@whiskeysockets/baileys');
-const P = require('pino');
-const fs = require('fs');
-const path = require('path');
-const moment = require("moment-timezone");
-const axios = require('axios');
 
-let usuariosNaFila = [];
-let lavagemAtiva = null;
-
-function formatarHorario(data) {
-  return data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-}
 // Parte 1
 const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, DisconnectReason } = require('@whiskeysockets/baileys');
 const P = require('pino');
