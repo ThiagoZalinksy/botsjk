@@ -1,0 +1,4 @@
+name = "tarefas"
+main = "index.js"
+compatibility_date = "2025-04-13"
+compatibility_flags = ["nodejs_compat_v2"]
