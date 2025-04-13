@@ -132,6 +132,10 @@ if (texto === "1") {
 
     const saudacao = obterSaudacao(agora.hour());
 
+    // Supondo que 'remetente' seja o número do usuário com código do país (ex: +5511999999999)
+    const usuarioId = remetente; // Esse é o ID do usuário no formato internacional
+    const nomeUsuario = '@' + remetente.split("@")[0]; // Para exibir como nome, exemplo: @11999999999
+
     lavagemAtiva = {
         usuario: nomeUsuario,
         numero: remetente,
@@ -139,14 +143,17 @@ if (texto === "1") {
         fim: fim.toDate()
     };
 
+    // Enviar a mensagem inicial mencionando o usuário
     await enviar({
-        text: `${saudacao} @${remetente.split("@")[0]}! 🧺 Lavagem iniciada às ${formatarHorario(agora)}.\n⏱️ Termina às ${formatarHorario(fim)}`
+        text: `${saudacao} ${nomeUsuario}! 🧺 Lavagem iniciada às ${formatarHorario(agora)}.\n⏱️ Termina às ${formatarHorario(fim)}`,
+        mentions: [usuarioId]  // Mencionando o usuário pelo número de telefone
     });
 
     setTimeout(async () => {
+        // Enviar a mensagem de notificação de término em 5 minutos
         await enviar({
-            text: `🔔 @${remetente.split("@")[0]} sua lavagem vai finalizar em 5 minutos.`,
-            mentions: [remetente]
+            text: `🔔 ${nomeUsuario}, sua lavagem vai finalizar em 5 minutos.`,
+            mentions: [usuarioId]  // Mencionando o usuário novamente
         });
     }, 1.55 * 60 * 60 * 1000); // 1 hora e 33 minutos
 
