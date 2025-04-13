@@ -217,8 +217,9 @@ async function iniciar() {
     }
   }); // fim de messages.upsert
 // Parte 9
-     }); // fim de connection.update
-} // fim da função iniciar()
+         }); // fim do sock.ev.on('connection.update')
+} // fim da função iniciar
 
 // Parte 10
 iniciar();
+
