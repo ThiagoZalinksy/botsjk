@@ -149,7 +149,7 @@ if (texto === "1") {
             mentions: [remetente]
         });
     }, 1.55 * 60 * 60 * 1000); // 1 hora e 33 minutos
-}
+
   
 } else if (texto === "4") {
     if (!lavagemAtiva || lavagemAtiva.numero !== remetente) {
