@@ -1,4 +1,3 @@
-// Parte 1
 const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, DisconnectReason } = require('@whiskeysockets/baileys');
 const P = require('pino');
 const fs = require('fs');
@@ -12,7 +11,6 @@ let lavagemAtiva = null;
 function formatarHorario(data) {
   return data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
-// Parte 2
 async function iniciar() {
   const { state, saveCreds } = await useMultiFileAuthState('auth');
   const { version } = await fetchLatestBaileysVersion();
@@ -25,7 +23,6 @@ async function iniciar() {
   });
 
   sock.ev.on("creds.update", saveCreds);
-// Parte 3
   sock.ev.on("connection.update", (update) => {
     const { connection, lastDisconnect } = update;
 
@@ -34,7 +31,8 @@ async function iniciar() {
       if (shouldReconnect) iniciar();
     } else if (connection === "open") {
       console.log("✅ Bot conectado com sucesso!");
-// Parte 4
+    }
+  }); // fim do sock.ev.on('connection.update')
   sock.ev.on('messages.upsert', async ({ messages }) => {
     const msg = messages[0];
     const remetente = msg.key.remoteJid;
@@ -55,7 +53,6 @@ async function iniciar() {
     const horaAtual = agora.format("HH:mm");
 
     console.log(`📩 Mensagem recebida: "${texto}" de ${remetente}`);
-// Parte 5
     if (!global.usuarios) global.usuarios = [];
 
     if (!global.usuarios.includes(remetente)) {
@@ -64,7 +61,7 @@ async function iniciar() {
         text: `👋 Olá ${nomeUsuario}, seja bem-vindo(a) à lavanderia! Envie *iniciar* para ver as opções.`
       });
     }
-// Parte 6
+
     if (texto === '1') {
       await sock.sendMessage(remetente, {
         text: `🧼 Siga as dicas para uma boa utilização pelo link:\nhttps://youtu.be/2O_PWz-0qic`
@@ -74,7 +71,6 @@ async function iniciar() {
         text: `🧾 *INFORMAÇÕES TÉCNICAS*\n\nLavadora Electrolux LT09E - 8,5Kg\nCentrifugação: Sim - 660 rpm\nConsumo: 0,25kWh/ciclo\nVoltagem: 220V\n...`
       });
     } else if (texto === '3') {
-      const agora = moment().tz("America/Sao_Paulo");
       const fim = agora.clone().add(2, 'hours');
 
       lavagemAtiva = {
@@ -95,8 +91,7 @@ async function iniciar() {
         });
       }, 1.55 * 60 * 60 * 1000);
 
-      const hora = agora.hour();
-      if (hora >= 20) {
+      if (agora.hour() >= 20) {
         await sock.sendMessage(remetente, {
           text: `⚠️ Essa é a última lavagem do dia, ${nomeUsuario}. A lavanderia fecha às 22h.`
         });
@@ -131,9 +126,7 @@ async function iniciar() {
           text: `📣 ${proximo.nome} foi avisado que pode usar a máquina agora.`
         });
       }
-    }
-// Parte 7
-    else if (texto === '5') {
+    } else if (texto === '5') {
       if (!global.usuariosNaFila) global.usuariosNaFila = [];
 
       const posicao = global.usuariosNaFila.findIndex(u => u.numero === remetente);
@@ -190,9 +183,7 @@ async function iniciar() {
       resposta += `\n📦 Peso total estimado: *${pesoTotal.toFixed(2)}kg*`;
 
       await sock.sendMessage(remetente, { text: resposta });
-    }
-// Parte 8
-    else if (texto === '8') {
+    } else if (texto === '8') {
       await sock.sendMessage(remetente, {
         text: `🕒 Horário de funcionamento: 07h às 22h`
       });
@@ -215,11 +206,7 @@ async function iniciar() {
         text: `📋 *Menu de opções:*\n1 - Dicas\n2 - Info Lavadora\n3 - Iniciar lavagem\n4 - Finalizar\n5 - Entrar na fila\n6 - Sair da fila\n7 - Sortear roupas\n8 - Horário\n9 - Tempo\n10 - Lixo`
       });
     }
-  }); // fim de messages.upsert
-// Parte 9
-         }); // fim do sock.ev.on('connection.update')
+  }); // fim do messages.upsert
 } // fim da função iniciar
 
-// Parte 10
 iniciar();
-
