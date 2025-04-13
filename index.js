@@ -19,11 +19,8 @@ const express = require("express"); // usado na parte 10
 let filaDeEspera = [];
 let lavagemAtiva = null;
 
-function formatarHorario(data) {
-return data.toLocaleTimeString("pt-BR", {
-  hour: "2-digit",
-  minute: "2-digit",
-});
+function formatarHorario(momentObj) {
+  return momentObj.format("HH:mm");
 }
 
 
