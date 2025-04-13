@@ -162,68 +162,78 @@ if (texto === "1") {
   
 
 } else if (texto === "4") {
-    if (!lavagemAtiva || lavagemAtiva.numero !== remetente) {
-      await enviar({ text: `⚠️ Nenhuma lavagem ativa ou você não está usando.` });
-      return;
-    }
+  if (!lavagemAtiva || lavagemAtiva.numero !== remetente) {
+    await enviar({ text: `⚠️ Nenhuma lavagem ativa ou você não está usando.` });
+    return;
+  }
+
+  const fimLavagem = moment.tz("America/Sao_Paulo");
+  const duracao = moment.duration(fimLavagem.diff(moment(lavagemAtiva.inicio)));
+  const duracaoStr = `${duracao.hours()}h ${duracao.minutes()}min`;
   
-    const fimLavagem = moment.tz("America/Sao_Paulo");
-    const duracao = moment.duration(fimLavagem.diff(moment(lavagemAtiva.inicio)));
-    const duracaoStr = `${duracao.hours()}h ${duracao.minutes()}min`;
   const usuarioId = msg.key.participant || remetente;
   const nomeUsuario = '@' + usuarioId.split('@')[0];
-    let resposta = `✅ Lavagem finalizada!\nNome:{nomeUsuario} \n 🕒 Duração: ${duracaoStr}\n`;
-  
-    if (duracao.asHours() > 2) {
-      resposta += `⚠️ Tempo ultrapassado! \n {nomeUsuario} \nTente ser mais pontual da próxima vez.`;
-    } else {
-      resposta += `🎉 Bom trabalho! \n{nomeUsuario}\n Você concluiu dentro do tempo.`;
-    }
-  
-    await enviar({ text: resposta, mentions: [remetente] });
-  
-    lavagemAtiva = null;
-  
-    // Notifica próximo da fila, se houver
-    if (filaDeEspera.length > 0) {
-      const proximo = filaDeEspera.shift();
-      await enviar({
-        text: `🔔 @${proximo.split("@")[0]}, a máquina está livre!\n👉 Use a opção *3* para iniciar sua lavagem.`,
-        mentions: [proximo]
-      });
-    }
+
+  let resposta = `✅ Lavagem finalizada!\n👤 ${nomeUsuario}\n🕒 Duração: ${duracaoStr}\n`;
+
+  if (duracao.asHours() > 2) {
+    resposta += `⚠️ Tempo ultrapassado, ${nomeUsuario}!\nTente ser mais pontual da próxima vez.`;
+  } else {
+    resposta += `🎉 Bom trabalho, ${nomeUsuario}! Você concluiu dentro do tempo.`;
   }
-  
-  else if (texto === "5") {
-    if (lavagemAtiva && lavagemAtiva.numero === remetente) {
-      await enviar({ text: `⚠️ Você já está usando o sistema de lavagem.` });
-      return;
-    }
-  
-    if (filaDeEspera.includes(remetente)) {
-      const posicao = filaDeEspera.indexOf(remetente) + 1;
-      const esperaHoras = posicao * 2;
-      await enviar({ text: `⏳ Você já está na fila (posição ${posicao}). Tempo estimado: ~${esperaHoras} hora(s).` });
-      return;
-    }
-  
-    if (!lavagemAtiva) {
-      await enviar({
-        text: `✅ A máquina está *livre* no momento.\n👉 Use a opção *3* para iniciar a lavagem.`
-      });
-      return;
-    }
-  
-    filaDeEspera.push(remetente);
-    const posicao = filaDeEspera.indexOf(remetente) + 1;
-    const esperaHoras = posicao * 2;
-    const usuarioId = msg.key.participant || remetente;
-    const nomeUsuario = '@' + usuarioId.split('@')[0];
+
+  await enviar({ text: resposta, mentions: [usuarioId] });
+
+  lavagemAtiva = null;
+
+  // Notifica próximo da fila, se houver
+  if (filaDeEspera.length > 0) {
+    const proximo = filaDeEspera.shift();
     await enviar({
-      text: `📝 {nomeUsuario}\nVocê foi adicionado à fila!\n🔢 Posição: ${posicao}\n🕒 Tempo estimado: ~${esperaHoras} hora(s).`
+      text: `🔔 @${proximo.split("@")[0]}, a máquina está livre!\n👉 Use a opção *3* para iniciar sua lavagem.`,
+      mentions: [proximo]
     });
   }
 
+
+  } else if (texto === "5") {
+  const usuarioId = msg.key.participant || remetente;
+  const nomeUsuario = '@' + usuarioId.split('@')[0];
+
+  if (lavagemAtiva && lavagemAtiva.numero === remetente) {
+    await enviar({
+      text: `⚠️ ${nomeUsuario}, você já está usando o sistema de lavagem.`,
+      mentions: [usuarioId]
+    });
+    return;
+  }
+
+  if (filaDeEspera.includes(remetente)) {
+    const posicao = filaDeEspera.indexOf(remetente) + 1;
+    const esperaHoras = posicao * 2;
+    await enviar({
+      text: `⏳ ${nomeUsuario}, você já está na fila (posição ${posicao}). Tempo estimado: ~${esperaHoras} hora(s).`,
+      mentions: [usuarioId]
+    });
+    return;
+  }
+
+  if (!lavagemAtiva) {
+    await enviar({
+      text: `✅ A máquina está *livre* no momento.\n👉 Use a opção *3* para iniciar a lavagem.`
+    });
+    return;
+  }
+
+  filaDeEspera.push(remetente);
+  const posicao = filaDeEspera.indexOf(remetente) + 1;
+  const esperaHoras = posicao * 2;
+
+  await enviar({
+    text: `📝 ${nomeUsuario}, você foi adicionado à fila!\n🔢 Posição: ${posicao}\n🕒 Tempo estimado: ~${esperaHoras} hora(s).`,
+    mentions: [usuarioId]
+  });
+}
 
 //Parte 8 — Gerenciamento da fila (comandos 5, 6)
 
