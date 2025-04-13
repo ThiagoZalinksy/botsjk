@@ -68,35 +68,36 @@ if (texto === '1') {
   } else if (texto === '3') {
     const agora = moment().tz("America/Sao_Paulo");
     const fim = agora.clone().add(2, 'hours');
-
-lavagemAtiva = {
-  usuario: nomeUsuario,
-  numero: remetente,
-  inicio: agora.toDate(),
-  fim: fim.toDate()
-};
-
-await sock.sendMessage(remetente, {
-  text: `🧺 Lavagem iniciada às ${formatarHorario(agora.toDate())}.\n⏱️ Finaliza às ${formatarHorario(fim.toDate())}.\n⛔ Tempo máximo: 2 horas.`
-});
-
+  
+    lavagemAtiva = {
+      usuario: nomeUsuario,
+      numero: remetente,
+      inicio: agora.toDate(),
+      fim: fim.toDate()
+    };
+  
+    await sock.sendMessage(remetente, {
+      text: `🧺 Lavagem iniciada às ${formatarHorario(agora.toDate())}.\n⏱️ Finaliza às ${formatarHorario(fim.toDate())}.\n⛔ Tempo máximo: 2 horas.`
+    });
+  
     setTimeout(async () => {
-        await sock.sendMessage(remetente, {
-          text: `🔔 @${remetente.split("@")[0]} sua lavagem vai finalizar em 5 minutos.`,
-          mentions: [remetente]
-        });
-      }, 1.55 * 60 * 60 * 1000);
+      await sock.sendMessage(remetente, {
+        text: `🔔 @${remetente.split("@")[0]} sua lavagem vai finalizar em 5 minutos.`,
+        mentions: [remetente]
+      });
+    }, 1.55 * 60 * 60 * 1000);
+  
+    const hora = agora.hour(); // CORREÇÃO AQUI
+  
+    if (hora >= 20) {
+      await sock.sendMessage(remetente, {
+        text: `⚠️ Essa é a última lavagem do dia, ${nomeUsuario}. A lavanderia fecha às 22h.`
+      });
+    }
+  }
+  
       
-      const hora = agora.getHours();
-
-if (hora >= 20) {
-  await sock.sendMessage(remetente, {
-    text: `⚠️ Essa é a última lavagem do dia, ${nomeUsuario}. A lavanderia fecha às 22h.`
-  });
-}
-
-      
-  } else if (texto === '4') {
+   else if (texto === '4') {
     if (!lavagemAtiva) {
       await sock.sendMessage(remetente, {
         text: `🔔 Não há nenhuma lavagem ativa no momento.`
