@@ -295,65 +295,55 @@ else if (texto === "6") {
         mentions: filaDeEspera
       });
     } else {
-      await enviar({ text: `🆓 A fila agora está vazia.` });
+      await enviar({ text: `🆓 Menos 1 na fila.` });
     }
   }
 
 //Parte 9 — Recursos adicionais: sorteio, previsão do tempo, lixo
 
-else if (texto.startsWith("7")) {
-    const proibidos = ["boné", "bonés", "tenis", "tênis", "travesseiro", "bicho", "pelucia", "pelúcia", "couro", "cobertor", "edredom"];
-    const pesos = {
-      camiseta: 0.3,
-      calca: 0.6,
-      calça: 0.6,
-      toalha: 0.5,
-      cama: 1.2,
-      meia: 0.1,
-      intima: 0.15,
-      íntima: 0.15
-    };
-  
-    const input = texto.slice(1).trim(); // Remove o "7"
-    const entradas = input.split(/\s|,/).filter(e => e.includes(":"));
-    let totalKg = 0;
-    let alertaProibido = [];
-    let listaDetalhada = [];
-  
-    for (let entrada of entradas) {
-      let [tipo, qtd] = entrada.split(":");
-      tipo = tipo.toLowerCase();
-      qtd = parseInt(qtd);
-  
-      const tipoNormalizado = Object.keys(pesos).find(p => tipo.includes(p));
-      const contemProibido = proibidos.some(p => tipo.includes(p));
-  
-      if (contemProibido) {
-        alertaProibido.push(tipo);
-        continue;
-      }
-  
-      if (tipoNormalizado && !isNaN(qtd)) {
-        const peso = pesos[tipoNormalizado] * qtd;
-        totalKg += peso;
-        listaDetalhada.push(`${qtd}x ${tipoNormalizado} (~${peso.toFixed(1)}kg)`);
-      }
-    }
-  
-    let mensagem = `🧮 Cálculo da carga:\n${listaDetalhada.join("\n")}\n\n⚖️ Peso total estimado: *${totalKg.toFixed(2)}kg*\n`;
-  
-    if (totalKg > 8) {
-      mensagem += `⚠️ *Ultrapassou o limite de 8kg!* Retire algumas peças.`;
-    } else {
-      mensagem += `✅ Dentro do limite! Pode lavar tranquilo.`;
-    }
-  
-    if (alertaProibido.length > 0) {
-      mensagem += `\n\n🚫 Itens não permitidos detectados: ${alertaProibido.join(", ")}.\nEstes não devem ser lavados na máquina!`;
-    }
-  
-    await enviar({ text: mensagem });
+else if (texto.trim() === "7") {
+  const pesos = {
+    camiseta: 0.3,
+    calça: 0.6,
+    toalha: 0.5,
+    cama: 1.2,
+    meia: 0.1,
+    íntima: 0.15
+  };
+
+  const proibidos = [
+    "boné", "bonés",
+    "tênis", "tenis",
+    "travesseiro",
+    "bicho de pelúcia", "pelúcia", "pelucia",
+    "couro",
+    "cobertor",
+    "edredom",
+    "almofada", "tapete", "mochila", "bolsa"
+  ];
+
+  const tipos = Object.keys(pesos);
+  let totalKg = 0;
+  let lista = [];
+
+  while (totalKg < 7.5) {
+    const tipo = tipos[Math.floor(Math.random() * tipos.length)];
+    const maxQtd = Math.floor((8 - totalKg) / pesos[tipo]);
+    if (maxQtd <= 0) break;
+
+    const qtd = Math.floor(Math.random() * Math.min(3, maxQtd)) + 1;
+    const pesoTotal = qtd * pesos[tipo];
+
+    totalKg += pesoTotal;
+    lista.push(`${qtd}x ${tipo} (~${pesoTotal.toFixed(1)}kg)`);
   }
+
+  let mensagem = `🧺 *Exemplo de carga ideal para lavagem (até 8kg):*\n\n${lista.join("\n")}\n\n⚖️ Peso total estimado: *${totalKg.toFixed(2)}kg*\n\n✅ Dentro do limite! Pode ajustar conforme sua necessidade.`;
+
+  mensagem += `\n\n🚫 *Itens que não devem ser lavados na máquina:*\n${proibidos.map(i => `- ${i}`).join("\n")}`;
+
+  await enviar({ text: mensagem });
+}
   else if (texto === "8") {
     const agora = moment.tz("America/Sao_Paulo"); // Pega a hora atual de São Paulo
     const horaAtualmente = agora.hour(); // Hora atual no formato de 24h
@@ -396,9 +386,9 @@ else if (texto.startsWith("7")) {
   
       // Montando a mensagem com emojis
       let mensagem = `🌦️ **Clima Atual em Viamão**\n\n`;
-      mensagem += `📅 **Última atualização**: Hoje às ${horaUltimaAtualizacao}\n`;
+     // mensagem += `📅 **Última atualização**: Hoje às ${horaUltimaAtualizacao}\n`;
       mensagem += `🌡️ **Temperatura**: ${temperatura}°C - Está considerado ${climaDescricao} para o momento.\n`;
-      mensagem += `🌤️ **Condição**: ${condicaoClima}\n`;
+     // mensagem += `🌤️ **Condição**: ${condicaoClima}\n`;
       mensagem += `💧 **Umidade**: ${info.humidity}%\n`;
       mensagem += `💨 **Vento**: ${info.wind_speed} km/h`;
   
