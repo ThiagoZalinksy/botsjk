@@ -7,7 +7,7 @@ const express = require("express");
 const { tratarMensagemLavanderia } = require("./lavanderia");
 const { tratarMensagemEncomendas } = require("./encomendas");
 
-let grupos = { lavanderia: null, encomendas: null };
+let grupos = { lavanderia: [], encomendas: [] };
 const caminhoGrupos = "grupos.json";
 
 // Carrega grupos previamente registrados
@@ -38,23 +38,29 @@ async function iniciar() {
 
     if (!msg.message || !remetente.endsWith("@g.us")) return;
 
-    // Registra automaticamente os grupos se os nomes forem conhecidos
-    const metadata = await sock.groupMetadata(remetente);
-    const nomeGrupo = metadata.subject;
+    try {
+      const metadata = await sock.groupMetadata(remetente);
+      const nomeGrupo = metadata.subject.toLowerCase();
 
-    if (!grupos.lavanderia && nomeGrupo.toLowerCase().includes("lavanderia")) {
-      grupos.lavanderia = remetente;
+      if (nomeGrupo.includes("lavanderia") && !grupos.lavanderia.includes(remetente)) {
+        grupos.lavanderia.push(remetente);
+        console.log("📌 Grupo de lavanderia registrado:", remetente);
+      }
+
+      if (nomeGrupo.includes("jk") && !grupos.encomendas.includes(remetente)) {
+        grupos.encomendas.push(remetente);
+        console.log("📌 Grupo de encomendas registrado:", remetente);
+      }
+
+      // Salva qualquer atualização
       fs.writeFileSync(caminhoGrupos, JSON.stringify(grupos, null, 2));
-      console.log("📌 Grupo da lavanderia registrado automaticamente:", remetente);
-    } else if (!grupos.encomendas && nomeGrupo.toLowerCase().includes("jk")) {
-      grupos.encomendas = remetente;
-      fs.writeFileSync(caminhoGrupos, JSON.stringify(grupos, null, 2));
-      console.log("📌 Grupo de encomendas registrado automaticamente:", remetente);
+    } catch (e) {
+      console.warn("❌ Erro ao obter metadados do grupo:", e.message);
     }
 
-    if (remetente === grupos.lavanderia) {
+    if (grupos.lavanderia.includes(remetente)) {
       await tratarMensagemLavanderia(sock, msg);
-    } else if (remetente === grupos.encomendas) {
+    } else if (grupos.encomendas.includes(remetente)) {
       await tratarMensagemEncomendas(sock, msg);
     } else {
       console.log("🔍 Mensagem de grupo não registrado:", remetente);
