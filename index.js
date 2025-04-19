@@ -41,12 +41,18 @@ async function iniciar() {
       const metadata = await sock.groupMetadata(remetente);
       const nomeGrupo = metadata.subject.toLowerCase();
 
-      if (nomeGrupo.includes("lavanderia") && !grupos.lavanderia.includes(remetente)) {
+      if (
+        nomeGrupo.includes("lavanderia") &&
+        !grupos.lavanderia.includes(remetente) &&
+        !grupos.encomendas.includes(remetente)
+      ) {
         grupos.lavanderia.push(remetente);
         console.log("📌 Grupo de lavanderia registrado:", remetente);
-      }
-
-      if (nomeGrupo.includes("jk") && !grupos.encomendas.includes(remetente)) {
+      } else if (
+        nomeGrupo.includes("jk") &&
+        !grupos.encomendas.includes(remetente) &&
+        !grupos.lavanderia.includes(remetente)
+      ) {
         grupos.encomendas.push(remetente);
         console.log("📌 Grupo de encomendas registrado:", remetente);
       }
@@ -56,7 +62,6 @@ async function iniciar() {
       console.warn("❌ Erro ao obter metadados do grupo:", e.message);
     }
 
-    // Direciona para o módulo correto baseado na lista de grupos
     if (grupos.lavanderia.includes(remetente)) {
       await tratarMensagemLavanderia(sock, msg);
     } else if (grupos.encomendas.includes(remetente)) {
