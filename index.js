@@ -1,9 +1,5 @@
-const {
-  default: makeWASocket,
-  useMultiFileAuthState,
-  fetchLatestBaileysVersion,
-  DisconnectReason,
-} = require("@whiskeysockets/baileys");
+
+const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require("@whiskeysockets/baileys");
 const P = require("pino");
 const fs = require("fs");
 const express = require("express");
@@ -14,15 +10,12 @@ const { tratarMensagemEncomendas } = require("./encomendas");
 let grupos = { lavanderia: [], encomendas: [] };
 const caminhoGrupos = "grupos.json";
 
+// Carrega grupos previamente registrados
 if (fs.existsSync(caminhoGrupos)) {
   grupos = JSON.parse(fs.readFileSync(caminhoGrupos, "utf-8"));
   console.log("✅ Grupos carregados:");
   console.log("🧺 Lavanderia:", grupos.lavanderia);
   console.log("📦 Encomendas:", grupos.encomendas);
-}
-
-function delay(ms) {
-  return new Promise((res) => setTimeout(res, ms));
 }
 
 async function iniciar() {
@@ -41,7 +34,6 @@ async function iniciar() {
   sock.ev.on("messages.upsert", async ({ messages }) => {
     const msg = messages[0];
     const remetente = msg.key.remoteJid;
-    const texto = msg.message?.conversation?.toLowerCase() || "";
 
     if (!msg.message || !remetente.endsWith("@g.us")) return;
 
@@ -49,68 +41,38 @@ async function iniciar() {
       const metadata = await sock.groupMetadata(remetente);
       const nomeGrupo = metadata.subject.toLowerCase();
 
-      // Registro automático
       if (
+        nomeGrupo.includes("lavanderia") &&
         !grupos.lavanderia.includes(remetente) &&
-        nomeGrupo.includes("lavanderia")
+        !grupos.encomendas.includes(remetente)
       ) {
         grupos.lavanderia.push(remetente);
-        fs.writeFileSync(caminhoGrupos, JSON.stringify(grupos, null, 2));
-        console.log("📌 Grupo da lavanderia registrado:", remetente);
+        console.log("📌 Grupo de lavanderia registrado:", remetente);
       } else if (
+        nomeGrupo.includes("jk") &&
         !grupos.encomendas.includes(remetente) &&
-        nomeGrupo.includes("jk")
+        !grupos.lavanderia.includes(remetente)
       ) {
         grupos.encomendas.push(remetente);
-        fs.writeFileSync(caminhoGrupos, JSON.stringify(grupos, null, 2));
         console.log("📌 Grupo de encomendas registrado:", remetente);
       }
 
-      await delay(1000); // evitar flood
-      if (grupos.lavanderia.includes(remetente)) {
-        await tratarMensagemLavanderia(sock, msg);
-      } else if (grupos.encomendas.includes(remetente)) {
-        await tratarMensagemEncomendas(sock, msg);
-      } else {
-        console.log("🔍 Mensagem de grupo não registrado:", remetente);
-      }
-    } catch (err) {
-      console.error("❌ Erro ao processar mensagem:", err.message);
+      fs.writeFileSync(caminhoGrupos, JSON.stringify(grupos, null, 2));
+    } catch (e) {
+      console.warn("❌ Erro ao obter metadados do grupo:", e.message);
+    }
+
+    if (grupos.lavanderia.includes(remetente)) {
+      await tratarMensagemLavanderia(sock, msg);
+    } else if (grupos.encomendas.includes(remetente)) {
+      await tratarMensagemEncomendas(sock, msg);
+    } else {
+      console.log("🔍 Mensagem de grupo não registrado:", remetente);
     }
   });
 
-  sock.ev.on("connection.update", (update) => {
-    const { connection, lastDisconnect } = update;
-    const statusCode = lastDisconnect?.error?.output?.statusCode;
-
-    if (connection === "close") {
-      const shouldReconnect =
-        statusCode !== DisconnectReason.loggedOut &&
-        statusCode !== DisconnectReason.connectionClosed &&
-        statusCode !== 428;
-
-      console.log(
-        `⚠️ Conexão encerrada. Código: ${statusCode} — Reconectar?`,
-        shouldReconnect
-      );
-
-      if (
-        statusCode === 428 ||
-        statusCode === DisconnectReason.connectionClosed
-      ) {
-        console.log("🧹 Sessão pode estar corrompida. Deletando pasta auth...");
-        try {
-          fs.rmSync("auth", { recursive: true, force: true });
-          console.log("✅ Pasta auth removida com sucesso.");
-        } catch (e) {
-          console.error("❌ Erro ao remover a pasta auth:", e.message);
-        }
-      }
-
-      if (shouldReconnect) {
-        setTimeout(() => iniciar(), 3000);
-      }
-    } else if (connection === "open") {
+  sock.ev.on("connection.update", ({ connection }) => {
+    if (connection === "open") {
       console.log("✅ Bot conectado ao WhatsApp!");
     }
   });
@@ -118,6 +80,7 @@ async function iniciar() {
 
 iniciar();
 
+// Web server para Render
 const app = express();
 app.get("/", (req, res) => {
   res.send("🤖 Bot WhatsApp rodando com sucesso!");
