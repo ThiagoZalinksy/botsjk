@@ -1,5 +1,9 @@
-
-const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, DisconnectReason } = require("@whiskeysockets/baileys");
+const {
+  default: makeWASocket,
+  useMultiFileAuthState,
+  fetchLatestBaileysVersion,
+  DisconnectReason,
+} = require("@whiskeysockets/baileys");
 const P = require("pino");
 const fs = require("fs");
 const express = require("express");
@@ -10,15 +14,15 @@ const { tratarMensagemEncomendas } = require("./encomendas");
 let grupos = { lavanderia: [], encomendas: [] };
 const caminhoGrupos = "grupos.json";
 
-// Delay auxiliar para evitar flood
-const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-
-// Carrega grupos previamente registrados
 if (fs.existsSync(caminhoGrupos)) {
   grupos = JSON.parse(fs.readFileSync(caminhoGrupos, "utf-8"));
   console.log("✅ Grupos carregados:");
   console.log("🧺 Lavanderia:", grupos.lavanderia);
   console.log("📦 Encomendas:", grupos.encomendas);
+}
+
+function delay(ms) {
+  return new Promise((res) => setTimeout(res, ms));
 }
 
 async function iniciar() {
@@ -37,6 +41,7 @@ async function iniciar() {
   sock.ev.on("messages.upsert", async ({ messages }) => {
     const msg = messages[0];
     const remetente = msg.key.remoteJid;
+    const texto = msg.message?.conversation?.toLowerCase() || "";
 
     if (!msg.message || !remetente.endsWith("@g.us")) return;
 
@@ -44,54 +49,57 @@ async function iniciar() {
       const metadata = await sock.groupMetadata(remetente);
       const nomeGrupo = metadata.subject.toLowerCase();
 
+      // Registro automático se o grupo for novo
       if (
-        nomeGrupo.includes("lavanderia") &&
         !grupos.lavanderia.includes(remetente) &&
-        !grupos.encomendas.includes(remetente)
+        nomeGrupo.includes("lavanderia")
       ) {
         grupos.lavanderia.push(remetente);
-        console.log("📌 Grupo de lavanderia registrado:", remetente);
+        fs.writeFileSync(caminhoGrupos, JSON.stringify(grupos, null, 2));
+        console.log("📌 Grupo da lavanderia registrado:", remetente);
       } else if (
-        nomeGrupo.includes("jk") &&
         !grupos.encomendas.includes(remetente) &&
-        !grupos.lavanderia.includes(remetente)
+        nomeGrupo.includes("jk")
       ) {
         grupos.encomendas.push(remetente);
+        fs.writeFileSync(caminhoGrupos, JSON.stringify(grupos, null, 2));
         console.log("📌 Grupo de encomendas registrado:", remetente);
       }
 
-      fs.writeFileSync(caminhoGrupos, JSON.stringify(grupos, null, 2));
-    } catch (e) {
-      console.warn("❌ Erro ao obter metadados do grupo:", e.message);
-    }
-
-    // Adiciona delay para evitar limite de taxa
-    await delay(1000);
-
-    if (grupos.lavanderia.includes(remetente)) {
-      await tratarMensagemLavanderia(sock, msg);
-    } else if (grupos.encomendas.includes(remetente)) {
-      await tratarMensagemEncomendas(sock, msg);
-    } else {
-      console.log("🔍 Mensagem de grupo não registrado:", remetente);
+      await delay(1000); // evita flood
+      if (grupos.lavanderia.includes(remetente)) {
+        await tratarMensagemLavanderia(sock, msg);
+      } else if (grupos.encomendas.includes(remetente)) {
+        await tratarMensagemEncomendas(sock, msg);
+      } else {
+        console.log("🔍 Mensagem de grupo não registrado:", remetente);
+      }
+    } catch (err) {
+      console.error("❌ Erro ao processar mensagem:", err.message);
     }
   });
 
   sock.ev.on("connection.update", (update) => {
     const { connection, lastDisconnect } = update;
-    if (connection === "open") {
+    const statusCode = lastDisconnect?.error?.output?.statusCode;
+
+    if (connection === "close") {
+      const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+      console.log(
+        `⚠️ Conexão encerrada. Código: ${statusCode} — Reconectar?`,
+        shouldReconnect
+      );
+      if (shouldReconnect) {
+        setTimeout(() => iniciar(), 3000); // espera 3s antes de tentar reconectar
+      }
+    } else if (connection === "open") {
       console.log("✅ Bot conectado ao WhatsApp!");
-    } else if (connection === "close") {
-      const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-      console.log("⚠️ Conexão encerrada. Reconectar?", shouldReconnect);
-      if (shouldReconnect) iniciar();
     }
   });
 }
 
 iniciar();
 
-// Web server para Render
 const app = express();
 app.get("/", (req, res) => {
   res.send("🤖 Bot WhatsApp rodando com sucesso!");
