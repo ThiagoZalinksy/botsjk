@@ -34,7 +34,6 @@ async function iniciar() {
   sock.ev.on("messages.upsert", async ({ messages }) => {
     const msg = messages[0];
     const remetente = msg.key.remoteJid;
-    const texto = msg.message?.conversation?.toLowerCase() || "";
 
     if (!msg.message || !remetente.endsWith("@g.us")) return;
 
@@ -52,12 +51,12 @@ async function iniciar() {
         console.log("📌 Grupo de encomendas registrado:", remetente);
       }
 
-      // Salva qualquer atualização
       fs.writeFileSync(caminhoGrupos, JSON.stringify(grupos, null, 2));
     } catch (e) {
       console.warn("❌ Erro ao obter metadados do grupo:", e.message);
     }
 
+    // Direciona para o módulo correto baseado na lista de grupos
     if (grupos.lavanderia.includes(remetente)) {
       await tratarMensagemLavanderia(sock, msg);
     } else if (grupos.encomendas.includes(remetente)) {
