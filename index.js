@@ -49,7 +49,7 @@ async function iniciar() {
       const metadata = await sock.groupMetadata(remetente);
       const nomeGrupo = metadata.subject.toLowerCase();
 
-      // Registro automático se o grupo for novo
+      // Registro automático
       if (
         !grupos.lavanderia.includes(remetente) &&
         nomeGrupo.includes("lavanderia")
@@ -66,7 +66,7 @@ async function iniciar() {
         console.log("📌 Grupo de encomendas registrado:", remetente);
       }
 
-      await delay(1000); // evita flood
+      await delay(1000); // evitar flood
       if (grupos.lavanderia.includes(remetente)) {
         await tratarMensagemLavanderia(sock, msg);
       } else if (grupos.encomendas.includes(remetente)) {
@@ -84,13 +84,31 @@ async function iniciar() {
     const statusCode = lastDisconnect?.error?.output?.statusCode;
 
     if (connection === "close") {
-      const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+      const shouldReconnect =
+        statusCode !== DisconnectReason.loggedOut &&
+        statusCode !== DisconnectReason.connectionClosed &&
+        statusCode !== 428;
+
       console.log(
         `⚠️ Conexão encerrada. Código: ${statusCode} — Reconectar?`,
         shouldReconnect
       );
+
+      if (
+        statusCode === 428 ||
+        statusCode === DisconnectReason.connectionClosed
+      ) {
+        console.log("🧹 Sessão pode estar corrompida. Deletando pasta auth...");
+        try {
+          fs.rmSync("auth", { recursive: true, force: true });
+          console.log("✅ Pasta auth removida com sucesso.");
+        } catch (e) {
+          console.error("❌ Erro ao remover a pasta auth:", e.message);
+        }
+      }
+
       if (shouldReconnect) {
-        setTimeout(() => iniciar(), 3000); // espera 3s antes de tentar reconectar
+        setTimeout(() => iniciar(), 3000);
       }
     } else if (connection === "open") {
       console.log("✅ Bot conectado ao WhatsApp!");
