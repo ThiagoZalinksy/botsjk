@@ -1,5 +1,5 @@
 
-const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require("@whiskeysockets/baileys");
+const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, DisconnectReason } = require("@whiskeysockets/baileys");
 const P = require("pino");
 const fs = require("fs");
 const express = require("express");
@@ -9,6 +9,9 @@ const { tratarMensagemEncomendas } = require("./encomendas");
 
 let grupos = { lavanderia: [], encomendas: [] };
 const caminhoGrupos = "grupos.json";
+
+// Delay auxiliar para evitar flood
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 // Carrega grupos previamente registrados
 if (fs.existsSync(caminhoGrupos)) {
@@ -62,6 +65,9 @@ async function iniciar() {
       console.warn("❌ Erro ao obter metadados do grupo:", e.message);
     }
 
+    // Adiciona delay para evitar limite de taxa
+    await delay(1000);
+
     if (grupos.lavanderia.includes(remetente)) {
       await tratarMensagemLavanderia(sock, msg);
     } else if (grupos.encomendas.includes(remetente)) {
@@ -71,9 +77,14 @@ async function iniciar() {
     }
   });
 
-  sock.ev.on("connection.update", ({ connection }) => {
+  sock.ev.on("connection.update", (update) => {
+    const { connection, lastDisconnect } = update;
     if (connection === "open") {
       console.log("✅ Bot conectado ao WhatsApp!");
+    } else if (connection === "close") {
+      const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+      console.log("⚠️ Conexão encerrada. Reconectar?", shouldReconnect);
+      if (shouldReconnect) iniciar();
     }
   });
 }
