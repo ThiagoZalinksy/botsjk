@@ -1,131 +1,65 @@
-const {
-  default: makeWASocket,
-  useMultiFileAuthState,
-  fetchLatestBaileysVersion,
-  DisconnectReason,
-} = require("@whiskeysockets/baileys");
-const P = require("pino");
-const fs = require("fs");
+const makeWASocket = require("@whiskeysockets/baileys").default;
+const { tratarMensagemLavanderia } = require("./modulos/lavanderia");
+const { tratarMensagemEncomendas } = require("./modulos/encomendas");
+const { useMultiFileAuthState } = require("@whiskeysockets/baileys");
 const express = require("express");
-const moment = require("moment-timezone");
 
-const { tratarMensagemLavanderia } = require("./lavanderia");
-const { tratarMensagemEncomendas } = require("./encomendas");
-
-// ✅ Lista de grupos permitidos por tipo
-const nomesGruposPermitidos = {
-  lavanderia: ["lavanderia jk", "teste lavanderia 2"],
-  encomendas: ["pousada jk universitário", "grupo jk teste"],
+const nomesGrupos = {
+  "Lavanderia JK": "120363099999999@g.us",
+  "Teste Lavanderia 2": "120363088888888@g.us",
+  "Pousada JK Universitário": "120363077777777@g.us",
+  "Grupo JK Teste": "120363066666666@g.us"
 };
 
-let grupos = { lavanderia: [], encomendas: [] };
-const caminhoGrupos = "grupos.json";
+const gruposLavanderia = [
+  nomesGrupos["Lavanderia JK"],
+  nomesGrupos["Teste Lavanderia 2"]
+];
 
-// ✅ Carrega grupos salvos (grupos.json)
-if (fs.existsSync(caminhoGrupos)) {
-  grupos = JSON.parse(fs.readFileSync(caminhoGrupos, "utf-8"));
-  console.log("✅ Grupos carregados:");
-  console.log("🧺 Lavanderia:", grupos.lavanderia);
-  console.log("📦 Encomendas:", grupos.encomendas);
+const gruposEncomendas = [
+  nomesGrupos["Pousada JK Universitário"],
+  nomesGrupos["Grupo JK Teste"]
+];
+
+// 🔍 Log de todos os grupos carregados
+console.log("📋 IDs dos grupos carregados:");
+for (const [nome, id] of Object.entries(nomesGrupos)) {
+  console.log(`🔹 ${nome}: ${id}`);
 }
 
-// 🔁 Delay para evitar flood (rate limit)
-function delay(ms) {
-  return new Promise((res) => setTimeout(res, ms));
-}
-
-async function iniciar() {
-  const { state, saveCreds } = await useMultiFileAuthState("auth");
-  const { version } = await fetchLatestBaileysVersion();
+async function iniciarBot() {
+  const { state, saveCreds } = await useMultiFileAuthState("auth_info_baileys");
 
   const sock = makeWASocket({
-    version,
     auth: state,
-    printQRInTerminal: true,
-    logger: P({ level: "silent" }),
+    printQRInTerminal: true
   });
 
   sock.ev.on("creds.update", saveCreds);
 
-  // 📩 Recebe mensagens
   sock.ev.on("messages.upsert", async ({ messages }) => {
     const msg = messages[0];
-    const remetente = msg.key.remoteJid;
-    const texto = msg.message?.conversation?.toLowerCase() || "";
+    const grupoId = msg.key.remoteJid;
 
-    if (!msg.message || !remetente.endsWith("@g.us")) return;
-
-    try {
-      const metadata = await sock.groupMetadata(remetente);
-      const nomeGrupo = metadata.subject.toLowerCase();
-
-      // ✅ Verifica e registra grupo da lavanderia
-      if (
-        nomesGruposPermitidos.lavanderia.includes(nomeGrupo) &&
-        !grupos.lavanderia.includes(remetente)
-      ) {
-        grupos.lavanderia.push(remetente);
-        fs.writeFileSync(caminhoGrupos, JSON.stringify(grupos, null, 2));
-        console.log("📌 Grupo da lavanderia registrado:", remetente);
-      }
-
-      // ✅ Verifica e registra grupo de encomendas
-      if (
-        nomesGruposPermitidos.encomendas.includes(nomeGrupo) &&
-        !grupos.encomendas.includes(remetente)
-      ) {
-        grupos.encomendas.push(remetente);
-        fs.writeFileSync(caminhoGrupos, JSON.stringify(grupos, null, 2));
-        console.log("📌 Grupo de encomendas registrado:", remetente);
-      }
-
-      await delay(1000); // 🕒 Prevê excesso de mensagens
-
-      if (grupos.lavanderia.includes(remetente)) {
-        await tratarMensagemLavanderia(sock, msg);
-      } else if (grupos.encomendas.includes(remetente)) {
-        await tratarMensagemEncomendas(sock, msg);
-      } else {
-        console.log("🔍 Mensagem de grupo não registrado:", remetente);
-      }
-    } catch (err) {
-      console.error("❌ Erro ao processar mensagem:", err.message);
+    if (gruposLavanderia.includes(grupoId)) {
+      await tratarMensagemLavanderia(sock, msg);
+    } else if (gruposEncomendas.includes(grupoId)) {
+      await tratarMensagemEncomendas(sock, msg);
     }
   });
 
-  // 🔄 Reconexão automática segura
-  sock.ev.on("connection.update", (update) => {
-    const { connection, lastDisconnect } = update;
-    const statusCode = lastDisconnect?.error?.output?.statusCode;
-
-    if (connection === "close") {
-      const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-      console.log(
-        `⚠️ Conexão encerrada. Código: ${statusCode} — Reconectar?`,
-        shouldReconnect
-      );
-
-      if (shouldReconnect) {
-        console.log("♻️ Reiniciando processo para reconectar...");
-        process.exit(); // 🔄 Render reinicia automaticamente
-      } else {
-        console.log("🚪 Sessão encerrada manualmente. Não reconectará.");
-      }
-    } else if (connection === "open") {
-      console.log("✅ Bot conectado ao WhatsApp!");
-    }
-  });
+  console.log("✅ Grupos carregados:");
+  console.log("🧺 Lavanderia:", gruposLavanderia);
+  console.log("📦 Encomendas:", gruposEncomendas);
+  console.log("✅ Bot conectado ao WhatsApp!");
 }
 
-// 🚀 Inicializa o bot
-iniciar();
-
-// 🌐 Servidor web da Render (apenas para manter serviço ativo)
+// Inicializa o servidor web (opcional, para manter o Render.com ativo)
 const app = express();
-app.get("/", (req, res) => {
-  res.send("🤖 Bot WhatsApp rodando com sucesso!");
-});
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
+app.get("/", (req, res) => res.send("Bot está rodando!"));
 app.listen(PORT, () => {
   console.log(`🌐 Servidor web escutando na porta ${PORT}`);
 });
+
+iniciarBot();
