@@ -53,67 +53,67 @@ async function tratarMensagemLavanderia(sock, msg) {
   }
 
   // Opção 1: Dicas
-  if (texto === "1") {
-    await enviar({ text: "🧼 Dicas de uso: https://youtu.be/2O_PWz-0qic" });
+if (texto === "1") {
+  await enviar({ text: "🧼 Dicas de uso: https://youtu.be/2O_PWz-0qic" });
 
-  // Opção 2: Info Lavadora
-  } else if (texto === "2") {
+// Opção 2: Info Lavadora
+} else if (texto === "2") {
+  await enviar({
+    text: "🧾 *Informações técnicas da lavadora*\nLavadora de Roupas Electrolux\nCapacidade: 8,5Kg\nModelo: LT09E Top Load Turbo Agitação Super\nProgramas de Lavagem: 9\nNíveis de Água: 4\nCor: Branca\n*CARACTERÍSTICAS*\nCapacidade (kg de roupas): 8,5Kg\nAcesso ao cesto: Superior\nÁgua quente: Não\nEnxágues: 1\nCentrifugação: Sim\nDispenser para sabão: Sim\nDispenser para amaciante: Sim\nDispenser para alvejante: Sim\nElimina fiapos: Sim - através do filtro\nNíveis de água: Extra, Baixo, Médio, Alto\nESPECIFICAÇÕES TÉCNICAS\nConsumo: (kWh) 0,25kWh/ciclo\nControles: Eletromecânicos\nVelocidade de centrifugação: (rpm) 660\nTensão/Voltagem: 220V\nAcabamento do cesto: Polipropileno\nConsumo de Energia: A (menos 25% de consumo)\nConsumo de água: 112 litros por ciclo\nEficiência Energética: A",
+  });
+
+// Opção 3: Iniciar Lavagem
+} else if (texto === "3") {
+  const tempoAvisoAntesDoFim = 10;
+  const fim = agora.clone().add(2, "hours");
+  const saudacao = agora.hour() < 12 ? "Bom dia" : agora.hour() < 18 ? "Boa tarde" : "Boa noite";
+
+  lavagemAtiva = {
+    usuario: nomeUsuario,
+    numero: remetente,
+    inicio: agora.toDate(),
+    fim: fim.toDate(),
+  };
+
+  await enviar({
+    text: `${saudacao} ${nomeUsuario} ! 🧺 Lavagem iniciada às ${formatarHorario(agora)}.\n⏱️ Termina às ${formatarHorario(fim)}`,
+    mentions: [usuarioId],
+  });
+
+  setTimeout(async () => {
     await enviar({
-      text: "🧾 *Informações técnicas da lavadora*\nLavadora de Roupas Electrolux\nCapacidade: 8,5Kg\nModelo: LT09E Top Load Turbo Agitação Super\nProgramas de Lavagem: 9\nNíveis de Água: 4\nCor: Branca\n*CARACTERÍSTICAS*\nCapacidade (kg de roupas): 8,5Kg\nAcesso ao cesto: Superior\nÁgua quente: Não\nEnxágues: 1\nCentrifugação: Sim\nDispenser para sabão: Sim\nDispenser para amaciante: Sim\nDispenser para alvejante: Sim\nElimina fiapos: Sim - através do filtro\nNíveis de água: Extra, Baixo, Médio, Alto\nESPECIFICAÇÕES TÉCNICAS\nConsumo: (kWh) 0,25kWh/ciclo\nControles: Eletromecânicos\nVelocidade de centrifugação: (rpm) 660\nTensão/Voltagem: 220V\nAcabamento do cesto: Polipropileno\nConsumo de Energia: A (menos 25% de consumo)\nConsumo de água: 112 litros por ciclo\nEficiência Energética: A",
-    });
-
-   // Opção 3: Iniciar Lavagem
-  } else if (texto === "3") {
-    const tempoAvisoAntesDoFim = 10; // minutos se quiser mudar o tempo que o ususario será avisado 
-    const fim = agora.clone().add(2, "hours");
-    const saudacao = agora.hour() < 12 ? "Bom dia" : agora.hour() < 18 ? "Boa tarde" : "Boa noite";
-
-    lavagemAtiva = {
-      usuario: nomeUsuario,
-      numero: remetente,
-      inicio: agora.toDate(),
-      fim: fim.toDate(),
-    };
-
-    await enviar({
-      text: `${saudacao} ${nomeUsuario} ! 🧺 Lavagem iniciada às ${formatarHorario(agora)}.\n⏱️ Termina às ${formatarHorario(fim)}`,
+      text: `🔔 ${nomeUsuario}, sua lavagem vai finalizar em ${tempoAvisoAntesDoFim} minutos.`,
       mentions: [usuarioId],
     });
+  }, (120 - tempoAvisoAntesDoFim) * 60 * 1000);
 
-    setTimeout(async () => {
-      await enviar({
-        text: `🔔 ${nomeUsuario}, sua lavagem vai finalizar em ${tempoAvisoAntesDoFim} minutos.`,
-        mentions: [usuarioId],
-      });
-    }, (120 - tempoAvisoAntesDoFim) * 60 * 1000); // Espera 110 minutos
+// Opção 4: Finalizar Lavagem
+} else if (texto === "4") {
+  if (!lavagemAtiva || lavagemAtiva.numero !== remetente) {
+    await enviar({ text: `⚠️ Nenhuma lavagem ativa ou você não está usando.` });
+    return;
   }
 
-  // Opção 4: Finalizar Lavagem
-  } else if (texto === "4") {
-    if (!lavagemAtiva || lavagemAtiva.numero !== remetente) {
-      await enviar({ text: `⚠️ Nenhuma lavagem ativa ou você não está usando.` });
-      return;
-    }
+  const fimLavagem = moment.tz("America/Sao_Paulo");
+  const duracao = moment.duration(fimLavagem.diff(moment(lavagemAtiva.inicio)));
+  const duracaoStr = `${duracao.hours()}h ${duracao.minutes()}min`;
 
-    const fimLavagem = moment.tz("America/Sao_Paulo");
-    const duracao = moment.duration(fimLavagem.diff(moment(lavagemAtiva.inicio)));
-    const duracaoStr = `${duracao.hours()}h ${duracao.minutes()}min`;
+  let resposta = `✅ Lavagem finalizada!\n👤 ${nomeUsuario}\n🕒 Duração: ${duracaoStr}\n`;
+  resposta += duracao.asHours() > 2
+    ? `⚠️ Tempo ultrapassado, ${nomeUsuario}!`
+    : `🎉 Bom trabalho, ${nomeUsuario}!`;
 
-    let resposta = `✅ Lavagem finalizada!\n👤 ${nomeUsuario}\n🕒 Duração: ${duracaoStr}\n`;
-    resposta += duracao.asHours() > 2
-      ? `⚠️ Tempo ultrapassado, ${nomeUsuario}!`
-      : `🎉 Bom trabalho, ${nomeUsuario}!`;
+  await enviar({ text: resposta, mentions: [usuarioId] });
+  lavagemAtiva = null;
 
-    await enviar({ text: resposta, mentions: [usuarioId] });
-    lavagemAtiva = null;
-
-    if (filaDeEspera.length > 0) {
-      const proximo = filaDeEspera.shift();
-      await enviar({
-        text: `🔔 @${proximo.split("@")[0]}, a máquina está livre!\n👉 Use a opção *3* para iniciar sua lavagem.`,
-        mentions: [proximo],
-      });
-    }
+  if (filaDeEspera.length > 0) {
+    const proximo = filaDeEspera.shift();
+    await enviar({
+      text: `🔔 @${proximo.split("@")[0]}, a máquina está livre!\n👉 Use a opção *3* para iniciar sua lavagem.`,
+      mentions: [proximo],
+    });
+  }
+}
 
   // Opção 5: Entrar na Fila
   } else if (texto === "5") {
