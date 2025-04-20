@@ -1,8 +1,8 @@
-
 const axios = require("axios");
 const URL_SHEETDB_ENCOMENDAS = "https://sheetdb.io/api/v1/g6f3ljg6px6yr";
 
 let estadosUsuarios = {};
+let ultimasMensagens = {}; // evita processar a mesma msg várias vezes
 
 function verificaPalavrasChave(texto) {
   const palavrasChave = [
@@ -21,7 +21,12 @@ async function tratarMensagemEncomendas(sock, msg) {
     msg.message?.extendedTextMessage?.text ||
     msg.message?.imageMessage?.caption ||
     ""
-  ).toLowerCase();
+  ).trim().toLowerCase();
+
+  // ignora mensagens vazias ou repetidas
+  if (!textoUsuario) return;
+  if (ultimasMensagens[remetente] === textoUsuario) return;
+  ultimasMensagens[remetente] = textoUsuario;
 
   const escolha = parseInt(textoUsuario, 10);
   let respostaTexto = "";
@@ -32,6 +37,8 @@ async function tratarMensagemEncomendas(sock, msg) {
 
     if (temPalavraChave || ehNumero) {
       estadosUsuarios[idSessao] = { etapa: "menu" };
+      // Reseta estado após 5 minutos
+      setTimeout(() => delete estadosUsuarios[idSessao], 5 * 60 * 1000);
     } else {
       return;
     }
