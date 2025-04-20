@@ -1,4 +1,3 @@
-
 const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require("@whiskeysockets/baileys");
 const P = require("pino");
 const fs = require("fs");
@@ -35,12 +34,20 @@ async function iniciar() {
     const msg = messages[0];
     const remetente = msg.key.remoteJid;
 
-    if (!msg.message || !remetente.endsWith("@g.us")) return;
+    // Ignora mensagens inválidas
+    if (
+      !msg.message ||
+      msg.key.fromMe ||
+      msg.message.protocolMessage ||
+      msg.message.reactionMessage ||
+      !remetente.endsWith("@g.us")
+    ) return;
 
     try {
       const metadata = await sock.groupMetadata(remetente);
       const nomeGrupo = metadata.subject.toLowerCase();
 
+      // Registro automático
       if (
         nomeGrupo.includes("lavanderia") &&
         !grupos.lavanderia.includes(remetente) &&
@@ -62,25 +69,36 @@ async function iniciar() {
       console.warn("❌ Erro ao obter metadados do grupo:", e.message);
     }
 
-    if (grupos.lavanderia.includes(remetente)) {
-      await tratarMensagemLavanderia(sock, msg);
-    } else if (grupos.encomendas.includes(remetente)) {
-      await tratarMensagemEncomendas(sock, msg);
-    } else {
-      console.log("🔍 Mensagem de grupo não registrado:", remetente);
+    console.log("🔔 Mensagem recebida de", remetente);
+
+    try {
+      if (grupos.lavanderia.includes(remetente)) {
+        console.log("💧 Chamando tratarMensagemLavanderia");
+        await tratarMensagemLavanderia(sock, msg);
+      } else if (grupos.encomendas.includes(remetente)) {
+        console.log("📦 Chamando tratarMensagemEncomendas");
+        await tratarMensagemEncomendas(sock, msg);
+      } else {
+        console.log("🔍 Mensagem de grupo não registrado:", remetente);
+      }
+    } catch (e) {
+      console.error("❗ Erro ao tratar mensagem:", e.message);
     }
   });
 
   sock.ev.on("connection.update", ({ connection }) => {
     if (connection === "open") {
       console.log("✅ Bot conectado ao WhatsApp!");
+    } else if (connection === "close") {
+      console.log("⚠️ Conexão encerrada. Reconectando...");
+      iniciar(); // reconectar automaticamente
     }
   });
 }
 
 iniciar();
 
-// Web server para Render
+// Web server para manter o Render vivo
 const app = express();
 app.get("/", (req, res) => {
   res.send("🤖 Bot WhatsApp rodando com sucesso!");
