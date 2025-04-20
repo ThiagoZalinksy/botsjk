@@ -57,9 +57,16 @@ async function iniciar() {
     }
   });
 
-  sock.ev.on("connection.update", ({ connection }) => {
+  sock.ev.on("connection.update", async ({ connection }) => {
     if (connection === "open") {
       console.log("✅ Bot conectado ao WhatsApp!");
+
+      const chats = await sock.groupFetchAllParticipating();
+      console.log("📋 Lista de grupos:");
+
+      Object.values(chats).forEach((grupo) => {
+        console.log(`📌 Nome: ${grupo.subject} | JID: ${grupo.id}`);
+      });
     }
   });
 }
