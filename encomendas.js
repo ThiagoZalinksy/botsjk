@@ -1,45 +1,51 @@
-// 📦 Módulo de Encomendas com prevenção contra duplicidade e controle de estado
+// 📦 Módulo de Encomendas com prevenção contra duplicidade, controle de estado, logs e timeout
 const axios = require("axios");
 const URL_SHEETDB_ENCOMENDAS = "https://sheetdb.io/api/v1/g6f3ljg6px6yr";
 
-// Armazena estado de cada usuário
-let estadosUsuarios = {};
+let estadosUsuarios = {};       // Estado da sessão
+let timeoutUsuarios = {};       // Timers de expiração
+const TEMPO_EXPIRACAO_MS = 5 * 60 * 1000; // 5 minutos
 
-// Define palavras-chave para ativar o bot
-function verificaPalavrasChave(texto) {
-  const palavrasChave = [
-    "menu", "0", "entrega", "entregou", "encomenda", "recebi",
-    "chegou", "chegada", "vai chegar", "está para chegar",
-    "alguém recebeu", "quem recebeu"
-  ];
-  return palavrasChave.some(p => texto.includes(p));
+function iniciarTimeout(idSessao) {
+  // Limpa o anterior (se existir) e inicia um novo timeout
+  if (timeoutUsuarios[idSessao]) clearTimeout(timeoutUsuarios[idSessao]);
+  timeoutUsuarios[idSessao] = setTimeout(() => {
+    console.log(`⌛ Sessão expirada: ${idSessao}`);
+    delete estadosUsuarios[idSessao];
+    delete timeoutUsuarios[idSessao];
+  }, TEMPO_EXPIRACAO_MS);
 }
 
-// Função principal exportada para responder
 async function tratarMensagemEncomendas(sock, msg) {
   try {
-    if (!msg.message || msg.key.fromMe || msg.messageStubType) return; // ignora mensagens de status ou do próprio bot
+    if (!msg.message || msg.key.fromMe || msg.messageStubType) return;
 
     const remetente = msg.key.remoteJid;
-    const textoUsuario = msg.message.conversation?.toLowerCase() || "";
+    const textoUsuario = msg.message.conversation?.toLowerCase().trim() || "";
     const idSessao = remetente + "_" + (msg.key.participant || "");
     const escolha = parseInt(textoUsuario, 10);
     const enviar = async (mensagem) => {
       await sock.sendMessage(remetente, typeof mensagem === "string" ? { text: mensagem } : mensagem);
     };
 
-    // Inicializa sessão se relevante
+    console.log(`📩 Mensagem de ${idSessao}: "${textoUsuario}"`);
+
+    // Início da sessão com "0"
     if (!estadosUsuarios[idSessao]) {
-      if (verificaPalavrasChave(textoUsuario) || !isNaN(escolha)) {
+      if (textoUsuario === "0") {
         estadosUsuarios[idSessao] = { etapa: "menu" };
+        iniciarTimeout(idSessao);
+        console.log(`🆕 Nova sessão iniciada para ${idSessao}`);
       } else {
-        return; // ignora mensagens irrelevantes
+        return;
       }
+    } else {
+      iniciarTimeout(idSessao); // Reinicia timeout em cada mensagem válida
     }
 
     const estado = estadosUsuarios[idSessao];
+    console.log(`🔄 Etapa atual de ${idSessao}: ${estado.etapa}`);
 
-    // Etapas do fluxo de mensagens
     switch (estado.etapa) {
       case "menu":
         await enviar("Escolha uma opção:\n1. Registrar Encomenda\n2. Consultar Encomendas\n3. Confirmar Recebimento");
@@ -57,6 +63,7 @@ async function tratarMensagemEncomendas(sock, msg) {
           ).join("\n\n") : "Nenhuma encomenda encontrada.";
           await enviar(resposta);
           delete estadosUsuarios[idSessao];
+          clearTimeout(timeoutUsuarios[idSessao]);
         } else if (escolha === 3) {
           estado.etapa = "confirmarNome";
           await enviar("De quem é essa encomenda?");
@@ -66,18 +73,21 @@ async function tratarMensagemEncomendas(sock, msg) {
         break;
 
       case "obterNome":
+        if (!textoUsuario) return await enviar("Por favor, digite um nome válido.");
         estado.nome = textoUsuario;
         estado.etapa = "obterData";
         await enviar("Qual a data estimada de entrega? (Ex: dia/mês/ano)");
         break;
 
       case "obterData":
+        if (!textoUsuario) return await enviar("Digite uma data válida.");
         estado.data = textoUsuario;
         estado.etapa = "obterLocal";
         await enviar("Onde a compra foi realizada? (Ex: Amazon, Mercado Livre)");
         break;
 
       case "obterLocal":
+        if (!textoUsuario) return await enviar("Digite um local válido.");
         estado.local = textoUsuario;
         await axios.post(URL_SHEETDB_ENCOMENDAS, [{
           nome: estado.nome,
@@ -87,15 +97,18 @@ async function tratarMensagemEncomendas(sock, msg) {
         }]);
         await enviar(`Ok, ${estado.nome}! Sua encomenda chegará no dia ${estado.data} e foi comprada em ${estado.local}.`);
         delete estadosUsuarios[idSessao];
+        clearTimeout(timeoutUsuarios[idSessao]);
         break;
 
       case "confirmarNome":
+        if (!textoUsuario) return await enviar("Digite um nome válido.");
         estado.nomeConfirmado = textoUsuario;
         estado.etapa = "confirmarRecebedor";
         await enviar("Quem está recebendo a encomenda?");
         break;
 
       case "confirmarRecebedor":
+        if (!textoUsuario) return await enviar("Digite o nome de quem está recebendo.");
         const recebidoPor = textoUsuario;
         const { data: lista } = await axios.get(URL_SHEETDB_ENCOMENDAS);
         const encomenda = lista.find(e => e.nome.toLowerCase() === estado.nomeConfirmado.toLowerCase() && e.status === "Aguardando Recebimento");
@@ -110,11 +123,13 @@ async function tratarMensagemEncomendas(sock, msg) {
           await enviar(`Nenhuma encomenda pendente encontrada para ${estado.nomeConfirmado}.`);
         }
         delete estadosUsuarios[idSessao];
+        clearTimeout(timeoutUsuarios[idSessao]);
         break;
 
       default:
-        await enviar("Algo deu errado. Envie 'Menu' para recomeçar.");
+        await enviar("Algo deu errado. Envie '0' para recomeçar.");
         delete estadosUsuarios[idSessao];
+        clearTimeout(timeoutUsuarios[idSessao]);
     }
   } catch (error) {
     console.error("❌ Erro no tratarMensagemEncomendas:", error.message);
