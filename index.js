@@ -59,7 +59,7 @@ async function iniciar() {
       const metadata = await sock.groupMetadata(remetente);
       const nomeGrupo = metadata.subject.toLowerCase();
 
-      // ✅ Verifica se o grupo pertence à lavanderia
+      // ✅ Verifica e registra grupo da lavanderia
       if (
         nomesGruposPermitidos.lavanderia.includes(nomeGrupo) &&
         !grupos.lavanderia.includes(remetente)
@@ -69,7 +69,7 @@ async function iniciar() {
         console.log("📌 Grupo da lavanderia registrado:", remetente);
       }
 
-      // ✅ Verifica se o grupo pertence às encomendas
+      // ✅ Verifica e registra grupo de encomendas
       if (
         nomesGruposPermitidos.encomendas.includes(nomeGrupo) &&
         !grupos.encomendas.includes(remetente)
@@ -93,7 +93,7 @@ async function iniciar() {
     }
   });
 
-  // 🔄 Reconexão automática
+  // 🔄 Reconexão automática segura
   sock.ev.on("connection.update", (update) => {
     const { connection, lastDisconnect } = update;
     const statusCode = lastDisconnect?.error?.output?.statusCode;
@@ -104,8 +104,12 @@ async function iniciar() {
         `⚠️ Conexão encerrada. Código: ${statusCode} — Reconectar?`,
         shouldReconnect
       );
+
       if (shouldReconnect) {
-        setTimeout(() => iniciar(), 3000);
+        console.log("♻️ Reiniciando processo para reconectar...");
+        process.exit(); // 🔄 Render reinicia automaticamente
+      } else {
+        console.log("🚪 Sessão encerrada manualmente. Não reconectará.");
       }
     } else if (connection === "open") {
       console.log("✅ Bot conectado ao WhatsApp!");
@@ -113,9 +117,10 @@ async function iniciar() {
   });
 }
 
+// 🚀 Inicializa o bot
 iniciar();
 
-// 🌐 Servidor web da Render
+// 🌐 Servidor web da Render (apenas para manter serviço ativo)
 const app = express();
 app.get("/", (req, res) => {
   res.send("🤖 Bot WhatsApp rodando com sucesso!");
