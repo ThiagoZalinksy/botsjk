@@ -113,7 +113,6 @@ if (texto === "1") {
       mentions: [proximo],
     });
   }
-}
 
   // Opção 5: Entrar na Fila
   } else if (texto === "5") {
