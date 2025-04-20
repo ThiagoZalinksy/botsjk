@@ -1,6 +1,6 @@
 const makeWASocket = require("@whiskeysockets/baileys").default;
-const { tratarMensagemLavanderia } = require("./modulos/lavanderia");
-const { tratarMensagemEncomendas } = require("./modulos/encomendas");
+const { tratarMensagemLavanderia } = require("lavanderia");
+const { tratarMensagemEncomendas } = require("encomendas");
 const { useMultiFileAuthState } = require("@whiskeysockets/baileys");
 const express = require("express");
 
