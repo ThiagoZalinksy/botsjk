@@ -1,4 +1,4 @@
-// 📦 Módulo de Encomendas com prevenção contra duplicidade, controle de estado, logs e timeout
+// 📦 Módulo de Encomendas com prevenção contra duplicidade, controle de estado, logs, timeout e formatação de data
 const axios = require("axios");
 const URL_SHEETDB_ENCOMENDAS = "https://sheetdb.io/api/v1/g6f3ljg6px6yr";
 
@@ -7,7 +7,6 @@ let timeoutUsuarios = {};       // Timers de expiração
 const TEMPO_EXPIRACAO_MS = 5 * 60 * 1000; // 5 minutos
 
 function iniciarTimeout(idSessao) {
-  // Limpa o anterior (se existir) e inicia um novo timeout
   if (timeoutUsuarios[idSessao]) clearTimeout(timeoutUsuarios[idSessao]);
   timeoutUsuarios[idSessao] = setTimeout(() => {
     console.log(`⌛ Sessão expirada: ${idSessao}`);
@@ -30,7 +29,6 @@ async function tratarMensagemEncomendas(sock, msg) {
 
     console.log(`📩 Mensagem de ${idSessao}: "${textoUsuario}"`);
 
-    // Início da sessão com "0"
     if (!estadosUsuarios[idSessao]) {
       if (textoUsuario === "0") {
         estadosUsuarios[idSessao] = { etapa: "menu" };
@@ -40,7 +38,7 @@ async function tratarMensagemEncomendas(sock, msg) {
         return;
       }
     } else {
-      iniciarTimeout(idSessao); // Reinicia timeout em cada mensagem válida
+      iniciarTimeout(idSessao);
     }
 
     const estado = estadosUsuarios[idSessao];
@@ -81,7 +79,24 @@ async function tratarMensagemEncomendas(sock, msg) {
 
       case "obterData":
         if (!textoUsuario) return await enviar("Digite uma data válida.");
-        estado.data = textoUsuario;
+
+        // Tenta interpretar e formatar a data
+        const partes = textoUsuario.split(/[\/\-\.]/); // aceita barra, traço ou ponto
+        if (partes.length !== 3) {
+          return await enviar("Formato inválido. Use dia/mês/ano.");
+        }
+
+        let [dia, mes, ano] = partes.map(p => parseInt(p, 10));
+        if (ano < 100) ano += 2000;
+
+        const dataObj = new Date(ano, mes - 1, dia);
+        if (dataObj.getDate() !== dia || dataObj.getMonth() !== mes - 1 || dataObj.getFullYear() !== ano) {
+          return await enviar("Data inválida. Verifique se digitou corretamente.");
+        }
+
+        const dataFormatada = `${String(dia).padStart(2, "0")}/${String(mes).padStart(2, "0")}/${ano}`;
+
+        estado.data = dataFormatada;
         estado.etapa = "obterLocal";
         await enviar("Onde a compra foi realizada? (Ex: Amazon, Mercado Livre)");
         break;
