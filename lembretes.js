@@ -49,7 +49,8 @@ const timeout = data.getTime() - Date.now();
 if (timeout <= 0) return;
 
 setTimeout(() => {
-sock.sendMessage(destinatario, { text: ⏰ Lembrete: ${texto} });
+sock.sendMessage(destinatario, { text: `⏰ Lembrete: ${texto}` });
+
 }, timeout);
 };
 
