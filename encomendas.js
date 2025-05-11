@@ -1,10 +1,10 @@
-// 📦 Módulo de Encomendas com controle por lista
+// 📦 Módulo de Encomendas com ID numérico e controle de sessão
 const axios = require("axios");
 const URL_SHEETDB_ENCOMENDAS = "https://sheetdb.io/api/v1/g6f3ljg6px6yr";
 
 let estadosUsuarios = {}; // Estado da sessão
 let timeoutUsuarios = {}; // Timers de expiração
-const TEMPO_EXPIRACAO_MS = 10 * 60 * 1000; // 5 minutos
+const TEMPO_EXPIRACAO_MS = 10 * 60 * 1000; // 10 minutos
 
 function iniciarTimeout(idSessao) {
   if (timeoutUsuarios[idSessao]) clearTimeout(timeoutUsuarios[idSessao]);
@@ -31,15 +31,17 @@ async function tratarMensagemEncomendas(sock, msg) {
       );
     };
 
-    // Só inicia ou continua sessão se usuário enviar "0" ou já estiver em sessão
     const sessaoAtiva = estadosUsuarios[idSessao];
-
     if (!sessaoAtiva && textoUsuario !== "0") return;
 
     if (textoUsuario === "0") {
       estadosUsuarios[idSessao] = { etapa: "menu" };
       iniciarTimeout(idSessao);
       await enviar("🔐 Iniciando módulo de encomendas...");
+      await enviar(
+        "Escolha uma opção:\n1. Registrar Encomenda\n2. Ver todas as Encomendas\n3. Confirmar Recebimento (via ID)"
+      );
+      estadosUsuarios[idSessao].etapa = "aguardandoEscolha";
       return;
     }
 
@@ -47,13 +49,6 @@ async function tratarMensagemEncomendas(sock, msg) {
     const estado = estadosUsuarios[idSessao];
 
     switch (estado.etapa) {
-      case "menu":
-        await enviar(
-          "Escolha uma opção:\n1. Registrar Encomenda\n2. Ver todas as Encomendas\n3. Confirmar Recebimento"
-        );
-        estado.etapa = "aguardandoEscolha";
-        break;
-
       case "aguardandoEscolha":
         if (escolha === 1) {
           estado.etapa = "obterNome";
@@ -78,9 +73,9 @@ async function tratarMensagemEncomendas(sock, msg) {
           for (const [nome, encomendas] of Object.entries(agrupado)) {
             resposta += `👤 ${nome}\n`;
             encomendas.forEach((e, i) => {
-              resposta += `${i + 1}. 🛒 ${e.local} — ${e.data}\n📍 Status: ${
-                e.status
-              }`;
+              resposta += `${i + 1}. 🆔 ${e.id} 🛒 ${e.local} — ${
+                e.data
+              }\n📍 Status: ${e.status}`;
               if (e.recebido_por)
                 resposta += `\n📬 Recebido por: ${e.recebido_por}`;
               resposta += `\n\n`;
@@ -90,8 +85,8 @@ async function tratarMensagemEncomendas(sock, msg) {
           await enviar(resposta.trim());
           delete estadosUsuarios[idSessao];
         } else if (escolha === 3) {
-          estado.etapa = "confirmarNome";
-          await enviar("👤 Qual o nome da pessoa que fez a compra?");
+          estado.etapa = "informarID";
+          await enviar("📦 Qual o ID da encomenda que deseja confirmar?");
         } else {
           await enviar("Opção inválida. Por favor, escolha 1, 2 ou 3.");
         }
@@ -104,7 +99,7 @@ async function tratarMensagemEncomendas(sock, msg) {
         break;
 
       case "obterData": {
-        const partes = textoUsuario.split(/[\/\-.]/);
+        const partes = textoUsuario.split(/[./-]/);
         if (partes.length !== 3)
           return await enviar("Formato inválido. Use dia/mês/ano.");
 
@@ -121,66 +116,48 @@ async function tratarMensagemEncomendas(sock, msg) {
         )}/${ano}`;
         estado.etapa = "obterLocal";
         await enviar(
-          "Onde a compra foi realizada? (Ex: Amazon, Mercado Livre)"
+          "Onde a compra foi realizada? (Ex: Shopee, Mercado Livre)"
         );
         break;
       }
 
-      case "obterLocal":
+      case "obterLocal": {
         estado.local = textoUsuario;
-        const { data } = await axios.get(URL_SHEETDB_ENCOMENDAS);
-        const idNovo = data.length ? Math.max(...data.map((e) => e.id)) + 1 : 1; // ID numérico automático
+        const { data: todas } = await axios.get(URL_SHEETDB_ENCOMENDAS);
+        const ids = todas
+          .map((e) => parseInt(e.id, 10))
+          .filter((i) => !isNaN(i));
+        const proximoId = (Math.max(0, ...ids) + 1).toString();
 
         await axios.post(URL_SHEETDB_ENCOMENDAS, [
           {
-            id: idNovo,
+            id: proximoId,
             nome: estado.nome,
             data: estado.data,
             local: estado.local,
             status: "Aguardando Recebimento",
           },
         ]);
+
         await enviar(
-          `✅ Encomenda registrada para ${estado.nome}!\n🗓️ Chegada em: ${estado.data}\n🛒 Loja: ${estado.local}`
+          `✅ Encomenda registrada para ${estado.nome}!\n🆔 ID: ${proximoId}\n🗓️ Chegada em: ${estado.data}\n🛒 Loja: ${estado.local}`
         );
         delete estadosUsuarios[idSessao];
         break;
+      }
 
-      case "confirmarNome":
-        estado.nomeConfirmado = textoUsuario;
-        const { data: encomendas } = await axios.get(URL_SHEETDB_ENCOMENDAS);
-        const pendentes = encomendas.filter(
-          (e) =>
-            e.nome.toLowerCase() === textoUsuario &&
-            e.status === "Aguardando Recebimento"
-        );
+      case "informarID": {
+        estado.idConfirmar = textoUsuario;
+        const { data } = await axios.get(URL_SHEETDB_ENCOMENDAS);
+        const encomenda = data.find((e) => e.id === estado.idConfirmar);
 
-        if (!pendentes.length) {
-          await enviar("Nenhuma encomenda pendente encontrada.");
+        if (!encomenda || encomenda.status !== "Aguardando Recebimento") {
+          await enviar("❌ ID inválido ou encomenda já recebida.");
           delete estadosUsuarios[idSessao];
           return;
         }
 
-        estado.listaPendentes = pendentes;
-        estado.etapa = "selecionarEncomenda";
-        let listaTexto = `🔍 Encomendas pendentes para ${textoUsuario}:\n\n`;
-        pendentes.forEach((e, i) => {
-          listaTexto += `${i + 1}. 🛒 ${e.local} — ${e.data}\n`;
-        });
-        listaTexto += "\n✏️ Digite o número da encomenda que está recebendo:";
-        await enviar(listaTexto);
-        break;
-
-      case "selecionarEncomenda": {
-        const index = parseInt(textoUsuario, 10) - 1;
-        const selecionada = estado.listaPendentes?.[index];
-
-        if (!selecionada) {
-          await enviar("Número inválido. Tente novamente.");
-          return;
-        }
-
-        estado.encomendaSelecionada = selecionada;
+        estado.encomendaSelecionada = encomenda;
         estado.etapa = "confirmarRecebedor";
         await enviar("✋ Quem está recebendo essa encomenda?");
         break;
@@ -190,7 +167,7 @@ async function tratarMensagemEncomendas(sock, msg) {
         const recebidoPor = textoUsuario;
         const enc = estado.encomendaSelecionada;
 
-        // Agora, a atualização é feita usando o ID da encomenda
+        // Atualizar a encomenda usando o ID
         await axios.patch(`${URL_SHEETDB_ENCOMENDAS}/id/${enc.id}`, {
           status: "Recebida",
           recebido_por: recebidoPor,
