@@ -4,7 +4,7 @@ const URL_SHEETDB_ENCOMENDAS = "https://sheetdb.io/api/v1/g6f3ljg6px6yr";
 
 let estadosUsuarios = {}; // Estado da sessão
 let timeoutUsuarios = {}; // Timers de expiração
-const TEMPO_EXPIRACAO_MS = 5 * 60 * 1000; // 5 minutos
+const TEMPO_EXPIRACAO_MS = 10 * 60 * 1000; // 10 minutos
 
 function iniciarTimeout(idSessao) {
   if (timeoutUsuarios[idSessao]) clearTimeout(timeoutUsuarios[idSessao]);
@@ -31,15 +31,18 @@ async function tratarMensagemEncomendas(sock, msg) {
       );
     };
 
-    // Só inicia ou continua sessão se usuário enviar "0" ou já estiver em sessão
     const sessaoAtiva = estadosUsuarios[idSessao];
 
+    // Só inicia ou continua sessão se usuário enviar "0" ou já estiver em sessão
     if (!sessaoAtiva && textoUsuario !== "0") return;
 
+    // Ao digitar "0", mostra direto o menu
     if (textoUsuario === "0") {
-      estadosUsuarios[idSessao] = { etapa: "menu" };
+      estadosUsuarios[idSessao] = { etapa: "aguardandoEscolha" };
       iniciarTimeout(idSessao);
-      await enviar("🔐 Iniciando módulo de encomendas...");
+      await enviar(
+        "📦 Módulo de Encomendas\nEscolha uma opção:\n1. Registrar Encomenda\n2. Ver todas as Encomendas\n3. Confirmar Recebimento"
+      );
       return;
     }
 
@@ -47,13 +50,6 @@ async function tratarMensagemEncomendas(sock, msg) {
     const estado = estadosUsuarios[idSessao];
 
     switch (estado.etapa) {
-      case "menu":
-        await enviar(
-          "Escolha uma opção:\n1. Registrar Encomenda\n2. Ver todas as Encomendas\n3. Confirmar Recebimento"
-        );
-        estado.etapa = "aguardandoEscolha";
-        break;
-
       case "aguardandoEscolha":
         if (escolha === 1) {
           estado.etapa = "obterNome";
@@ -104,7 +100,7 @@ async function tratarMensagemEncomendas(sock, msg) {
         break;
 
       case "obterData": {
-        const partes = textoUsuario.split(/[\/\-.]/);
+        const partes = textoUsuario.split(/[\/-\.]/);
         if (partes.length !== 3)
           return await enviar("Formato inválido. Use dia/mês/ano.");
 
