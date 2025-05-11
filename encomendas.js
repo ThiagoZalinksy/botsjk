@@ -1,4 +1,6 @@
 // [Mantém-se os imports e variáveis iniciais inalterados]
+const estadosUsuarios = {}; // Armazena o estado por sessão
+const timeoutUsuarios = {}; // Controla os timeouts por sessão
 
 function iniciarTimeout(idSessao) {
   if (timeoutUsuarios[idSessao]) clearTimeout(timeoutUsuarios[idSessao]);
