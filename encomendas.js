@@ -1,9 +1,4 @@
-const axios = require("axios");
-const URL_SHEETDB_ENCOMENDAS = "https://sheetdb.io/api/v1/g6f3ljg6px6yr";
-
-let estadosUsuarios = {};
-let timeoutUsuarios = {};
-const TEMPO_EXPIRACAO_MS = 5 * 60 * 1000;
+// [Mantém-se os imports e variáveis iniciais inalterados]
 
 function iniciarTimeout(idSessao) {
   if (timeoutUsuarios[idSessao]) clearTimeout(timeoutUsuarios[idSessao]);
@@ -20,11 +15,9 @@ async function tratarMensagemEncomendas(sock, msg) {
 
     const remetente = msg.key.remoteJid;
     const textoUsuario =
-      msg.message?.conversation?.toLowerCase().trim() ||
-      msg.message?.buttonsResponseMessage?.selectedButtonId ||
+      msg.message.conversation?.toLowerCase().trim() ||
       msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId ||
       "";
-
     const idSessao = remetente + "_" + (msg.key.participant || "");
     const enviar = async (mensagem) => {
       await sock.sendMessage(
@@ -45,140 +38,60 @@ async function tratarMensagemEncomendas(sock, msg) {
     switch (estado.etapa) {
       case "menu":
         await sock.sendMessage(remetente, {
-          text: "📦 Bem-vindo ao sistema de encomendas. Escolha uma opção:",
-          buttons: [
+          text: "🧭 *Menu Principal*",
+          buttonText: "Ver opções",
+          sections: [
             {
-              buttonId: "registrar",
-              buttonText: { displayText: "1. Registrar Encomenda" },
-              type: 1,
-            },
-            {
-              buttonId: "consultar",
-              buttonText: { displayText: "2. Consultar Encomendas" },
-              type: 1,
-            },
-            {
-              buttonId: "confirmar",
-              buttonText: { displayText: "3. Confirmar Recebimento" },
-              type: 1,
+              title: "📋 Selecione uma ação:",
+              rows: [
+                { title: "1 📝 Registrar Encomenda", rowId: "registrar" },
+                { title: "2 🔍 Consultar Encomendas", rowId: "consultar" },
+                { title: "3 📬 Confirmar Recebimento", rowId: "confirmar" },
+              ],
             },
           ],
-          headerType: 1,
         });
-        estado.etapa = "aguardandoEscolhaBotao";
+        estado.etapa = "aguardandoEscolha";
         break;
 
-      case "aguardandoEscolhaBotao":
+      case "aguardandoEscolha":
         if (textoUsuario === "registrar") {
           estado.etapa = "obterNome";
-          await enviar("👤 Qual o seu nome?");
+          await enviar("🧑 Qual o *nome do destinatário*?");
         } else if (textoUsuario === "consultar") {
-          const { data } = await axios.get(URL_SHEETDB_ENCOMENDAS);
-          const nomesUnicos = [...new Set(data.map((e) => e.nome))];
-
-          await sock.sendMessage(remetente, {
-            text: "👥 Escolha o nome para consultar as encomendas:",
-            sections: [
-              {
-                title: "Clientes",
-                rows: nomesUnicos.map((nome) => ({
-                  title: nome,
-                  rowId: `consultar_${nome.toLowerCase()}`,
-                })),
-              },
-            ],
-            buttonText: "Ver Nomes",
-            headerType: 1,
-          });
-
-          estado.etapa = "aguardandoNomeConsulta";
+          estado.etapa = "consultarPorNome";
+          await enviar(
+            "🔎 Informe o *nome da pessoa* para consultar suas encomendas:"
+          );
         } else if (textoUsuario === "confirmar") {
-          const { data } = await axios.get(URL_SHEETDB_ENCOMENDAS);
-          const nomesPendentes = [
-            ...new Set(
-              data
-                .filter((e) => e.status === "Aguardando Recebimento")
-                .map((e) => e.nome)
-            ),
-          ];
-
-          if (!nomesPendentes.length) {
-            await enviar("Nenhuma encomenda pendente.");
-            delete estadosUsuarios[idSessao];
-            return;
-          }
-
-          await sock.sendMessage(remetente, {
-            text: "👥 Quem está recebendo a encomenda?",
-            sections: [
-              {
-                title: "Clientes Pendentes",
-                rows: nomesPendentes.map((nome) => ({
-                  title: nome,
-                  rowId: `confirmar_${nome.toLowerCase()}`,
-                })),
-              },
-            ],
-            buttonText: "Ver Nomes",
-            headerType: 1,
-          });
-
-          estado.etapa = "aguardandoNomeConfirmacao";
+          estado.etapa = "confirmarNome";
+          await enviar("✉️ Qual o *nome do comprador* da encomenda recebida?");
+        } else {
+          await enviar("⚠️ Opção inválida. Envie *0* para recomeçar.");
+          delete estadosUsuarios[idSessao];
         }
         break;
 
-      case "aguardandoNomeConsulta": {
-        if (!textoUsuario.startsWith("consultar_")) return;
-        const nome = textoUsuario.replace("consultar_", "").trim();
+      case "consultarPorNome": {
         const { data } = await axios.get(URL_SHEETDB_ENCOMENDAS);
-        const lista = data.filter((e) => e.nome.toLowerCase() === nome);
+        const lista = data.filter((e) => e.nome.toLowerCase() === textoUsuario);
 
         if (!lista.length) {
-          await enviar("Nenhuma encomenda encontrada.");
+          await enviar("📭 Nenhuma encomenda encontrada para esse nome.");
           delete estadosUsuarios[idSessao];
           return;
         }
 
-        await sock.sendMessage(remetente, {
-          text: `📦 Encomendas para ${nome}`,
-          sections: [
-            {
-              title: "Encomendas Encontradas",
-              rows: lista.map((e, i) => ({
-                title: `${e.local} — ${e.data}`,
-                description: `Status: ${e.status}`,
-                rowId: `detalhes_${i}`,
-              })),
-            },
-          ],
-          buttonText: "Ver Encomendas",
-          headerType: 1,
+        let resposta = `📦 *Encomendas para* ${textoUsuario}:\n\n`;
+        lista.forEach((e, i) => {
+          resposta +=
+            `*${i + 1}.* 🛍️ *${e.local}* - ${e.data}\n` +
+            `📍 Status: ${e.status}${
+              e.recebido_por ? `\n📬 Recebido por: ${e.recebido_por}` : ""
+            }\n\n`;
         });
 
-        estado.listaConsultada = lista;
-        estado.etapa = "aguardandoSelecaoEncomenda";
-        break;
-      }
-
-      case "aguardandoSelecaoEncomenda": {
-        if (!textoUsuario.startsWith("detalhes_")) return;
-        const index = parseInt(textoUsuario.replace("detalhes_", ""), 10);
-        const encomenda = estado.listaConsultada?.[index];
-
-        if (!encomenda) {
-          await enviar("Encomenda inválida.");
-          return;
-        }
-
-        await enviar(
-          `📦 *Detalhes da Encomenda:*\n\n🛒 Loja: ${
-            encomenda.local
-          }\n📅 Data: ${encomenda.data}\n📍 Status: ${encomenda.status}${
-            encomenda.recebido_por
-              ? `\n📬 Recebido por: ${encomenda.recebido_por}`
-              : ""
-          }`
-        );
+        await enviar(resposta.trim());
         delete estadosUsuarios[idSessao];
         break;
       }
@@ -186,25 +99,27 @@ async function tratarMensagemEncomendas(sock, msg) {
       case "obterNome":
         estado.nome = textoUsuario;
         estado.etapa = "obterData";
-        await enviar("📅 Qual a data estimada de entrega? (Ex: 11/05/2025)");
+        await enviar("📅 Informe a *data de entrega* (formato: dia/mês/ano):");
         break;
 
       case "obterData": {
         const partes = textoUsuario.split(/[\/\-.]/);
         if (partes.length !== 3)
-          return await enviar("Formato inválido. Use dia/mês/ano.");
+          return await enviar("⚠️ Formato inválido. Use *dia/mês/ano*.");
+
         let [dia, mes, ano] = partes.map((p) => parseInt(p, 10));
         if (ano < 100) ano += 2000;
         const dataObj = new Date(ano, mes - 1, dia);
         if (dataObj.getDate() !== dia || dataObj.getMonth() !== mes - 1) {
-          return await enviar("Data inválida.");
+          return await enviar("⚠️ Data inválida. Verifique e tente novamente.");
         }
+
         estado.data = `${String(dia).padStart(2, "0")}/${String(mes).padStart(
           2,
           "0"
         )}/${ano}`;
         estado.etapa = "obterLocal";
-        await enviar("🛍️ Onde a compra foi realizada?");
+        await enviar("🏪 Onde a compra foi feita? (Ex: Amazon, Shopee)");
         break;
       }
 
@@ -218,64 +133,70 @@ async function tratarMensagemEncomendas(sock, msg) {
             status: "Aguardando Recebimento",
           },
         ]);
+
         await enviar(
-          `✅ Encomenda registrada!\n\n👤 Nome: ${estado.nome}\n📅 Data: ${estado.data}\n🛒 Loja: ${estado.local}`
+          `✅ Encomenda registrada!\n\n🧑 *Nome:* ${estado.nome}\n🗓️ *Entrega:* ${estado.data}\n🛍️ *Loja:* ${estado.local}`
         );
         delete estadosUsuarios[idSessao];
         break;
 
-      case "aguardandoNomeConfirmacao": {
-        if (!textoUsuario.startsWith("confirmar_")) return;
-        const nome = textoUsuario.replace("confirmar_", "").trim();
-        const { data } = await axios.get(URL_SHEETDB_ENCOMENDAS);
-        const pendentes = data.filter(
+      case "confirmarNome":
+        estado.nomeConfirmado = textoUsuario;
+        const { data: encomendas } = await axios.get(URL_SHEETDB_ENCOMENDAS);
+        const pendentes = encomendas.filter(
           (e) =>
-            e.nome.toLowerCase() === nome &&
+            e.nome.toLowerCase() === textoUsuario &&
             e.status === "Aguardando Recebimento"
         );
 
         if (!pendentes.length) {
-          await enviar("Nenhuma encomenda pendente para este nome.");
+          await enviar("📭 Nenhuma encomenda pendente encontrada.");
           delete estadosUsuarios[idSessao];
           return;
         }
 
+        estado.listaPendentes = pendentes;
+        estado.etapa = "selecionarEncomenda";
+
         await sock.sendMessage(remetente, {
-          text: `📦 Encomendas pendentes para ${nome}`,
+          text: `📬 *Encomendas pendentes para* ${textoUsuario}:`,
+          buttonText: "Selecionar",
           sections: [
             {
-              title: "Selecione a encomenda recebida",
+              title: "Selecione qual encomenda foi recebida:",
               rows: pendentes.map((e, i) => ({
                 title: `${e.local} — ${e.data}`,
-                rowId: `receber_${i}`,
+                rowId: `encomenda_${i}`,
               })),
             },
           ],
-          buttonText: "Ver Encomendas",
-          headerType: 1,
         });
 
-        estado.listaPendentes = pendentes;
-        estado.nomeConfirmado = nome;
-        estado.etapa = "aguardandoSelecaoRecebimento";
         break;
-      }
 
-      case "aguardandoSelecaoRecebimento": {
-        if (!textoUsuario.startsWith("receber_")) return;
-        const index = parseInt(textoUsuario.replace("receber_", ""), 10);
+      case "selecionarEncomenda":
+        if (!textoUsuario.startsWith("encomenda_")) {
+          await enviar("⚠️ Escolha inválida. Tente novamente usando o menu.");
+          return;
+        }
+
+        const index = parseInt(textoUsuario.split("_")[1], 10);
         const selecionada = estado.listaPendentes?.[index];
 
-        if (!selecionada) return await enviar("Encomenda inválida.");
+        if (!selecionada) {
+          await enviar("⚠️ Número inválido.");
+          return;
+        }
+
         estado.encomendaSelecionada = selecionada;
         estado.etapa = "confirmarRecebedor";
-        await enviar("✋ Quem está recebendo essa encomenda?");
+        await enviar("🙋 Quem está *recebendo* a encomenda?");
         break;
-      }
 
       case "confirmarRecebedor": {
         const recebidoPor = textoUsuario;
         const enc = estado.encomendaSelecionada;
+
         await axios.patch(
           `${URL_SHEETDB_ENCOMENDAS}/nome/${encodeURIComponent(enc.nome)}`,
           {
@@ -285,14 +206,14 @@ async function tratarMensagemEncomendas(sock, msg) {
         );
 
         await enviar(
-          `✅ Recebimento registrado!\n📦 ${enc.local} em ${enc.data}\n📬 Recebido por: ${recebidoPor}`
+          `✅ *Recebimento confirmado!*\n\n📦 ${enc.nome} — ${enc.local} em ${enc.data}\n📬 *Recebido por:* ${recebidoPor}`
         );
         delete estadosUsuarios[idSessao];
         break;
       }
 
       default:
-        await enviar("Algo deu errado. Envie '0' para recomeçar.");
+        await enviar("⚠️ Algo deu errado. Envie *0* para recomeçar.");
         delete estadosUsuarios[idSessao];
     }
   } catch (error) {
