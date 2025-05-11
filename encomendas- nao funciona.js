@@ -1,15 +1,11 @@
-// 📦 Módulo de Encomendas com controle por lista
-const axios = require("axios");
-const URL_SHEETDB_ENCOMENDAS = "https://sheetdb.io/api/v1/g6f3ljg6px6yr";
-
-let estadosUsuarios = {}; // Estado da sessão
-let timeoutUsuarios = {}; // Timers de expiração
-const TEMPO_EXPIRACAO_MS = 5 * 60 * 1000; // 5 minutos
+// [Mantém-se os imports e variáveis iniciais inalterados]
+const estadosUsuarios = {}; // Armazena o estado por sessão
+const timeoutUsuarios = {}; // Controla os timeouts por sessão
 
 function iniciarTimeout(idSessao) {
   if (timeoutUsuarios[idSessao]) clearTimeout(timeoutUsuarios[idSessao]);
   timeoutUsuarios[idSessao] = setTimeout(() => {
-    console.log(⌛ Sessão expirada: ${idSessao});
+    console.log(`⌛ Sessão expirada: ${idSessao}`);
     delete estadosUsuarios[idSessao];
     delete timeoutUsuarios[idSessao];
   }, TEMPO_EXPIRACAO_MS);
@@ -20,9 +16,11 @@ async function tratarMensagemEncomendas(sock, msg) {
     if (!msg.message || msg.key.fromMe || msg.messageStubType) return;
 
     const remetente = msg.key.remoteJid;
-    const textoUsuario = msg.message.conversation?.toLowerCase().trim() || "";
+    const textoUsuario =
+      msg.message.conversation?.toLowerCase().trim() ||
+      msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId ||
+      "";
     const idSessao = remetente + "_" + (msg.key.participant || "");
-    const escolha = parseInt(textoUsuario, 10);
     const enviar = async (mensagem) => {
       await sock.sendMessage(
         remetente,
@@ -41,24 +39,38 @@ async function tratarMensagemEncomendas(sock, msg) {
 
     switch (estado.etapa) {
       case "menu":
-        await enviar(
-          "Escolha uma opção:\n1. Registrar Encomenda\n2. Consultar Encomendas\n3. Confirmar Recebimento"
-        );
+        await sock.sendMessage(remetente, {
+          text: "🧭 *Menu Principal*",
+          buttonText: "Ver opções",
+          sections: [
+            {
+              title: "📋 Selecione uma ação:",
+              rows: [
+                { title: "1 📝 Registrar Encomenda", rowId: "registrar" },
+                { title: "2 🔍 Consultar Encomendas", rowId: "consultar" },
+                { title: "3 📬 Confirmar Recebimento", rowId: "confirmar" },
+              ],
+            },
+          ],
+        });
         estado.etapa = "aguardandoEscolha";
         break;
 
       case "aguardandoEscolha":
-        if (escolha === 1) {
+        if (textoUsuario === "registrar") {
           estado.etapa = "obterNome";
-          await enviar("Qual o seu nome?");
-        } else if (escolha === 2) {
+          await enviar("🧑 Qual o *nome do destinatário*?");
+        } else if (textoUsuario === "consultar") {
           estado.etapa = "consultarPorNome";
-          await enviar("👤 Qual o seu nome para consultar suas encomendas?");
-        } else if (escolha === 3) {
+          await enviar(
+            "🔎 Informe o *nome da pessoa* para consultar suas encomendas:"
+          );
+        } else if (textoUsuario === "confirmar") {
           estado.etapa = "confirmarNome";
-          await enviar("👤 Qual o nome da pessoa que fez a compra?");
+          await enviar("✉️ Qual o *nome do comprador* da encomenda recebida?");
         } else {
-          await enviar("Opção inválida. Por favor, escolha 1, 2 ou 3.");
+          await enviar("⚠️ Opção inválida. Envie *0* para recomeçar.");
+          delete estadosUsuarios[idSessao];
         }
         break;
 
@@ -67,17 +79,18 @@ async function tratarMensagemEncomendas(sock, msg) {
         const lista = data.filter((e) => e.nome.toLowerCase() === textoUsuario);
 
         if (!lista.length) {
-          await enviar("Nenhuma encomenda encontrada.");
+          await enviar("📭 Nenhuma encomenda encontrada para esse nome.");
           delete estadosUsuarios[idSessao];
           return;
         }
 
-        let resposta = 📦 Encomendas encontradas para ${textoUsuario}:
-\n;
+        let resposta = `📦 *Encomendas para* ${textoUsuario}:\n\n`;
         lista.forEach((e, i) => {
-          resposta += ${i + 1}. 🛒 ${e.local} — ${e.data}\n📍 Status: ${
-            e.status
-          }${e.recebido_por ? \n📬 Recebido por: ${e.recebido_por} : ""}\n\n;
+          resposta +=
+            `*${i + 1}.* 🛍️ *${e.local}* - ${e.data}\n` +
+            `📍 Status: ${e.status}${
+              e.recebido_por ? `\n📬 Recebido por: ${e.recebido_por}` : ""
+            }\n\n`;
         });
 
         await enviar(resposta.trim());
@@ -88,29 +101,27 @@ async function tratarMensagemEncomendas(sock, msg) {
       case "obterNome":
         estado.nome = textoUsuario;
         estado.etapa = "obterData";
-        await enviar("Qual a data estimada de entrega? (Ex: dia/mês/ano)");
+        await enviar("📅 Informe a *data de entrega* (formato: dia/mês/ano):");
         break;
 
       case "obterData": {
         const partes = textoUsuario.split(/[\/\-.]/);
         if (partes.length !== 3)
-          return await enviar("Formato inválido. Use dia/mês/ano.");
+          return await enviar("⚠️ Formato inválido. Use *dia/mês/ano*.");
 
         let [dia, mes, ano] = partes.map((p) => parseInt(p, 10));
         if (ano < 100) ano += 2000;
         const dataObj = new Date(ano, mes - 1, dia);
         if (dataObj.getDate() !== dia || dataObj.getMonth() !== mes - 1) {
-          return await enviar("Data inválida.");
+          return await enviar("⚠️ Data inválida. Verifique e tente novamente.");
         }
 
-        estado.data = ${String(dia).padStart(2, "0")}/${String(mes).padStart(
+        estado.data = `${String(dia).padStart(2, "0")}/${String(mes).padStart(
           2,
           "0"
-        )}/${ano};
+        )}/${ano}`;
         estado.etapa = "obterLocal";
-        await enviar(
-          "Onde a compra foi realizada? (Ex: Amazon, Mercado Livre)"
-        );
+        await enviar("🏪 Onde a compra foi feita? (Ex: Amazon, Shopee)");
         break;
       }
 
@@ -124,8 +135,9 @@ async function tratarMensagemEncomendas(sock, msg) {
             status: "Aguardando Recebimento",
           },
         ]);
+
         await enviar(
-          ✅ Encomenda registrada para ${estado.nome}!\n🗓️ Chegada em: ${estado.data}\n🛒 Loja: ${estado.local}
+          `✅ Encomenda registrada!\n\n🧑 *Nome:* ${estado.nome}\n🗓️ *Entrega:* ${estado.data}\n🛍️ *Loja:* ${estado.local}`
         );
         delete estadosUsuarios[idSessao];
         break;
@@ -140,42 +152,55 @@ async function tratarMensagemEncomendas(sock, msg) {
         );
 
         if (!pendentes.length) {
-          await enviar("Nenhuma encomenda pendente encontrada.");
+          await enviar("📭 Nenhuma encomenda pendente encontrada.");
           delete estadosUsuarios[idSessao];
           return;
         }
 
         estado.listaPendentes = pendentes;
         estado.etapa = "selecionarEncomenda";
-        let listaTexto = 🔍 Encomendas pendentes para ${textoUsuario}:\n\n;
-        pendentes.forEach((e, i) => {
-          listaTexto += ${i + 1}. 🛒 ${e.local} — ${e.data}\n;
+
+        await sock.sendMessage(remetente, {
+          text: `📬 *Encomendas pendentes para* ${textoUsuario}:`,
+          buttonText: "Selecionar",
+          sections: [
+            {
+              title: "Selecione qual encomenda foi recebida:",
+              rows: pendentes.map((e, i) => ({
+                title: `${e.local} — ${e.data}`,
+                rowId: `encomenda_${i}`,
+              })),
+            },
+          ],
         });
-        listaTexto += "\n✏️ Digite o número da encomenda que está recebendo:";
-        await enviar(listaTexto);
+
         break;
 
-      case "selecionarEncomenda": {
-        const index = parseInt(textoUsuario, 10) - 1;
+      case "selecionarEncomenda":
+        if (!textoUsuario.startsWith("encomenda_")) {
+          await enviar("⚠️ Escolha inválida. Tente novamente usando o menu.");
+          return;
+        }
+
+        const index = parseInt(textoUsuario.split("_")[1], 10);
         const selecionada = estado.listaPendentes?.[index];
 
         if (!selecionada) {
-          await enviar("Número inválido. Tente novamente.");
+          await enviar("⚠️ Número inválido.");
           return;
         }
 
         estado.encomendaSelecionada = selecionada;
         estado.etapa = "confirmarRecebedor";
-        await enviar("✋ Quem está recebendo essa encomenda?");
+        await enviar("🙋 Quem está *recebendo* a encomenda?");
         break;
-      }
 
       case "confirmarRecebedor": {
         const recebidoPor = textoUsuario;
         const enc = estado.encomendaSelecionada;
 
         await axios.patch(
-          ${URL_SHEETDB_ENCOMENDAS}/nome/${encodeURIComponent(enc.nome)},
+          `${URL_SHEETDB_ENCOMENDAS}/nome/${encodeURIComponent(enc.nome)}`,
           {
             status: "Recebida",
             recebido_por: recebidoPor,
@@ -183,14 +208,14 @@ async function tratarMensagemEncomendas(sock, msg) {
         );
 
         await enviar(
-          ✅ Recebimento registrado!\n📦 ${enc.nome} — ${enc.local} em ${enc.data}\n📬 Recebido por: ${recebidoPor}
+          `✅ *Recebimento confirmado!*\n\n📦 ${enc.nome} — ${enc.local} em ${enc.data}\n📬 *Recebido por:* ${recebidoPor}`
         );
         delete estadosUsuarios[idSessao];
         break;
       }
 
       default:
-        await enviar("Algo deu errado. Envie '0' para recomeçar.");
+        await enviar("⚠️ Algo deu errado. Envie *0* para recomeçar.");
         delete estadosUsuarios[idSessao];
     }
   } catch (error) {
