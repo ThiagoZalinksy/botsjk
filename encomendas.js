@@ -1,13 +1,14 @@
+// 📦 Módulo de Encomendas com controle por lista
 const axios = require("axios");
 const URL_SHEETDB_ENCOMENDAS = "https://sheetdb.io/api/v1/g6f3ljg6px6yr";
 
-let estadosUsuarios = {};
-let timeoutUsuarios = {};
-const TEMPO_EXPIRACAO_MS = 5 * 60 * 1000;
+let estadosUsuarios = {}; // Estado da sessão
+let timeoutUsuarios = {}; // Timers de expiração
+const TEMPO_EXPIRACAO_MS = 5 * 60 * 1000; // 5 minutos
 
 function iniciarTimeout(idSessao) {
   if (timeoutUsuarios[idSessao]) clearTimeout(timeoutUsuarios[idSessao]);
-  timeoutUsuarios[idSessao] = setTimeout(async () => {
+  timeoutUsuarios[idSessao] = setTimeout(() => {
     console.log(`⌛ Sessão expirada: ${idSessao}`);
     delete estadosUsuarios[idSessao];
     delete timeoutUsuarios[idSessao];
@@ -22,6 +23,7 @@ async function tratarMensagemEncomendas(sock, msg) {
     const textoUsuario = msg.message.conversation?.toLowerCase().trim() || "";
     const idSessao = remetente + "_" + (msg.key.participant || "");
     const escolha = parseInt(textoUsuario, 10);
+
     const enviar = async (mensagem) => {
       await sock.sendMessage(
         remetente,
@@ -29,19 +31,25 @@ async function tratarMensagemEncomendas(sock, msg) {
       );
     };
 
-    if (!estadosUsuarios[idSessao]) {
-      if (textoUsuario === "0") {
-        estadosUsuarios[idSessao] = { etapa: "menu" };
-        iniciarTimeout(idSessao);
-      } else return;
-    } else iniciarTimeout(idSessao);
+    // Só inicia ou continua sessão se usuário enviar "0" ou já estiver em sessão
+    const sessaoAtiva = estadosUsuarios[idSessao];
 
+    if (!sessaoAtiva && textoUsuario !== "0") return;
+
+    if (textoUsuario === "0") {
+      estadosUsuarios[idSessao] = { etapa: "menu" };
+      iniciarTimeout(idSessao);
+      await enviar("🔐 Iniciando módulo de encomendas...");
+      return;
+    }
+
+    iniciarTimeout(idSessao);
     const estado = estadosUsuarios[idSessao];
 
     switch (estado.etapa) {
       case "menu":
         await enviar(
-          "Escolha uma opção:\n1. Registrar Encomenda\n2. Ver Encomendas Registradas\n3. Confirmar Recebimento"
+          "Escolha uma opção:\n1. Registrar Encomenda\n2. Ver todas as Encomendas\n3. Confirmar Recebimento"
         );
         estado.etapa = "aguardandoEscolha";
         break;
@@ -51,8 +59,36 @@ async function tratarMensagemEncomendas(sock, msg) {
           estado.etapa = "obterNome";
           await enviar("Qual o seu nome?");
         } else if (escolha === 2) {
-          estado.etapa = "consultarTodos";
-          await enviar("🔍 Buscando todas as encomendas registradas...");
+          const { data } = await axios.get(URL_SHEETDB_ENCOMENDAS);
+
+          if (!data.length) {
+            await enviar("📭 Nenhuma encomenda registrada ainda.");
+            delete estadosUsuarios[idSessao];
+            return;
+          }
+
+          const agrupado = {};
+          data.forEach((e) => {
+            const nome = e.nome?.toLowerCase().trim() || "desconhecido";
+            if (!agrupado[nome]) agrupado[nome] = [];
+            agrupado[nome].push(e);
+          });
+
+          let resposta = `📦 Encomendas registradas:\n\n`;
+          for (const [nome, encomendas] of Object.entries(agrupado)) {
+            resposta += `👤 ${nome}\n`;
+            encomendas.forEach((e, i) => {
+              resposta += `${i + 1}. 🛒 ${e.local} — ${e.data}\n📍 Status: ${
+                e.status
+              }`;
+              if (e.recebido_por)
+                resposta += `\n📬 Recebido por: ${e.recebido_por}`;
+              resposta += `\n\n`;
+            });
+          }
+
+          await enviar(resposta.trim());
+          delete estadosUsuarios[idSessao];
         } else if (escolha === 3) {
           estado.etapa = "confirmarNome";
           await enviar("👤 Qual o nome da pessoa que fez a compra?");
@@ -60,40 +96,6 @@ async function tratarMensagemEncomendas(sock, msg) {
           await enviar("Opção inválida. Por favor, escolha 1, 2 ou 3.");
         }
         break;
-
-      case "consultarTodos": {
-        const { data } = await axios.get(URL_SHEETDB_ENCOMENDAS);
-
-        if (!data.length) {
-          await enviar("📭 Nenhuma encomenda registrada ainda.");
-          delete estadosUsuarios[idSessao];
-          return;
-        }
-
-        const agrupado = {};
-        data.forEach((e) => {
-          const nome = e.nome || "Desconhecido";
-          if (!agrupado[nome]) agrupado[nome] = [];
-          agrupado[nome].push(e);
-        });
-
-        let resposta = `📦 Encomendas registradas:\n\n`;
-        for (const [nome, encomendas] of Object.entries(agrupado)) {
-          resposta += `👤 ${nome}\n`;
-          encomendas.forEach((e, i) => {
-            resposta += `${i + 1}. 🛒 ${e.local} — ${e.data}\n📍 Status: ${
-              e.status
-            }`;
-            if (e.recebido_por)
-              resposta += `\n📬 Recebido por: ${e.recebido_por}`;
-            resposta += `\n\n`;
-          });
-        }
-
-        await enviar(resposta.trim());
-        delete estadosUsuarios[idSessao];
-        break;
-      }
 
       case "obterNome":
         estado.nome = textoUsuario;
