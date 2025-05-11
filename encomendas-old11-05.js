@@ -1,4 +1,4 @@
-// 📦 Módulo de Encomendas com controle por lista
+// 📦 Módulo de Encomendas com prevenção contra duplicidade, controle de estado, logs, timeout e formatação de data
 const axios = require("axios");
 const URL_SHEETDB_ENCOMENDAS = "https://sheetdb.io/api/v1/g6f3ljg6px6yr";
 
@@ -30,14 +30,22 @@ async function tratarMensagemEncomendas(sock, msg) {
       );
     };
 
+    console.log(`📩 Mensagem de ${idSessao}: "${textoUsuario}"`);
+
     if (!estadosUsuarios[idSessao]) {
       if (textoUsuario === "0") {
         estadosUsuarios[idSessao] = { etapa: "menu" };
         iniciarTimeout(idSessao);
-      } else return;
-    } else iniciarTimeout(idSessao);
+        console.log(`🆕 Nova sessão iniciada para ${idSessao}`);
+      } else {
+        return;
+      }
+    } else {
+      iniciarTimeout(idSessao);
+    }
 
     const estado = estadosUsuarios[idSessao];
+    console.log(`🔄 Etapa atual de ${idSessao}: ${estado.etapa}`);
 
     switch (estado.etapa) {
       case "menu":
@@ -52,69 +60,74 @@ async function tratarMensagemEncomendas(sock, msg) {
           estado.etapa = "obterNome";
           await enviar("Qual o seu nome?");
         } else if (escolha === 2) {
-          estado.etapa = "consultarPorNome";
-          await enviar("👤 Qual o seu nome para consultar suas encomendas?");
+          const { data } = await axios.get(URL_SHEETDB_ENCOMENDAS);
+          const resposta = data.length
+            ? data
+                .map(
+                  (e) =>
+                    `Nome: ${e.nome}\nData Estimada: ${e.data}\nCompra em: ${
+                      e.local
+                    }\nStatus: ${e.status}${
+                      e.recebido_por ? `\nRecebido por: ${e.recebido_por}` : ""
+                    }`
+                )
+                .join("\n\n")
+            : "Nenhuma encomenda encontrada.";
+          await enviar(resposta);
+          delete estadosUsuarios[idSessao];
+          clearTimeout(timeoutUsuarios[idSessao]);
         } else if (escolha === 3) {
           estado.etapa = "confirmarNome";
-          await enviar("👤 Qual o nome da pessoa que fez a compra?");
+          await enviar("De quem é essa encomenda?");
         } else {
           await enviar("Opção inválida. Por favor, escolha 1, 2 ou 3.");
         }
         break;
 
-      case "consultarPorNome": {
-        const { data } = await axios.get(URL_SHEETDB_ENCOMENDAS);
-        const lista = data.filter((e) => e.nome.toLowerCase() === textoUsuario);
-
-        if (!lista.length) {
-          await enviar("Nenhuma encomenda encontrada.");
-          delete estadosUsuarios[idSessao];
-          return;
-        }
-
-        let resposta = `📦 Encomendas encontradas para ${textoUsuario}:
-\n`;
-        lista.forEach((e, i) => {
-          resposta += `${i + 1}. 🛒 ${e.local} — ${e.data}\n📍 Status: ${
-            e.status
-          }${e.recebido_por ? `\n📬 Recebido por: ${e.recebido_por}` : ""}\n\n`;
-        });
-
-        await enviar(resposta.trim());
-        delete estadosUsuarios[idSessao];
-        break;
-      }
-
       case "obterNome":
+        if (!textoUsuario)
+          return await enviar("Por favor, digite um nome válido.");
         estado.nome = textoUsuario;
         estado.etapa = "obterData";
         await enviar("Qual a data estimada de entrega? (Ex: dia/mês/ano)");
         break;
 
-      case "obterData": {
-        const partes = textoUsuario.split(/[\/\-.]/);
-        if (partes.length !== 3)
+      case "obterData":
+        if (!textoUsuario) return await enviar("Digite uma data válida.");
+
+        // Tenta interpretar e formatar a data
+        const partes = textoUsuario.split(/[\/\-\.]/); // aceita barra, traço ou ponto
+        if (partes.length !== 3) {
           return await enviar("Formato inválido. Use dia/mês/ano.");
+        }
 
         let [dia, mes, ano] = partes.map((p) => parseInt(p, 10));
         if (ano < 100) ano += 2000;
+
         const dataObj = new Date(ano, mes - 1, dia);
-        if (dataObj.getDate() !== dia || dataObj.getMonth() !== mes - 1) {
-          return await enviar("Data inválida.");
+        if (
+          dataObj.getDate() !== dia ||
+          dataObj.getMonth() !== mes - 1 ||
+          dataObj.getFullYear() !== ano
+        ) {
+          return await enviar(
+            "Data inválida. Verifique se digitou corretamente."
+          );
         }
 
-        estado.data = `${String(dia).padStart(2, "0")}/${String(mes).padStart(
-          2,
-          "0"
-        )}/${ano}`;
+        const dataFormatada = `${String(dia).padStart(2, "0")}/${String(
+          mes
+        ).padStart(2, "0")}/${ano}`;
+
+        estado.data = dataFormatada;
         estado.etapa = "obterLocal";
         await enviar(
           "Onde a compra foi realizada? (Ex: Amazon, Mercado Livre)"
         );
         break;
-      }
 
       case "obterLocal":
+        if (!textoUsuario) return await enviar("Digite um local válido.");
         estado.local = textoUsuario;
         await axios.post(URL_SHEETDB_ENCOMENDAS, [
           {
@@ -125,73 +138,56 @@ async function tratarMensagemEncomendas(sock, msg) {
           },
         ]);
         await enviar(
-          `✅ Encomenda registrada para ${estado.nome}!\n🗓️ Chegada em: ${estado.data}\n🛒 Loja: ${estado.local}`
+          `Ok, ${estado.nome}! Sua encomenda chegará no dia ${estado.data} e foi comprada em ${estado.local}.`
         );
         delete estadosUsuarios[idSessao];
+        clearTimeout(timeoutUsuarios[idSessao]);
         break;
 
       case "confirmarNome":
+        if (!textoUsuario) return await enviar("Digite um nome válido.");
         estado.nomeConfirmado = textoUsuario;
-        const { data: encomendas } = await axios.get(URL_SHEETDB_ENCOMENDAS);
-        const pendentes = encomendas.filter(
+        estado.etapa = "confirmarRecebedor";
+        await enviar("Quem está recebendo a encomenda?");
+        break;
+
+      case "confirmarRecebedor":
+        if (!textoUsuario)
+          return await enviar("Digite o nome de quem está recebendo.");
+        const recebidoPor = textoUsuario;
+        const { data: lista } = await axios.get(URL_SHEETDB_ENCOMENDAS);
+        const encomenda = lista.find(
           (e) =>
-            e.nome.toLowerCase() === textoUsuario &&
+            e.nome.toLowerCase() === estado.nomeConfirmado.toLowerCase() &&
             e.status === "Aguardando Recebimento"
         );
 
-        if (!pendentes.length) {
-          await enviar("Nenhuma encomenda pendente encontrada.");
-          delete estadosUsuarios[idSessao];
-          return;
+        if (encomenda) {
+          await axios.patch(
+            `${URL_SHEETDB_ENCOMENDAS}/nome/${encodeURIComponent(
+              encomenda.nome
+            )}`,
+            {
+              status: "Recebida",
+              recebido_por: recebidoPor,
+            }
+          );
+          await enviar(
+            `Recebimento confirmado! ${encomenda.nome} recebeu sua encomenda, registrada por ${recebidoPor}.`
+          );
+        } else {
+          await enviar(
+            `Nenhuma encomenda pendente encontrada para ${estado.nomeConfirmado}.`
+          );
         }
-
-        estado.listaPendentes = pendentes;
-        estado.etapa = "selecionarEncomenda";
-        let listaTexto = `🔍 Encomendas pendentes para ${textoUsuario}:\n\n`;
-        pendentes.forEach((e, i) => {
-          listaTexto += `${i + 1}. 🛒 ${e.local} — ${e.data}\n`;
-        });
-        listaTexto += "\n✏️ Digite o número da encomenda que está recebendo:";
-        await enviar(listaTexto);
-        break;
-
-      case "selecionarEncomenda": {
-        const index = parseInt(textoUsuario, 10) - 1;
-        const selecionada = estado.listaPendentes?.[index];
-
-        if (!selecionada) {
-          await enviar("Número inválido. Tente novamente.");
-          return;
-        }
-
-        estado.encomendaSelecionada = selecionada;
-        estado.etapa = "confirmarRecebedor";
-        await enviar("✋ Quem está recebendo essa encomenda?");
-        break;
-      }
-
-      case "confirmarRecebedor": {
-        const recebidoPor = textoUsuario;
-        const enc = estado.encomendaSelecionada;
-
-        await axios.patch(
-          `${URL_SHEETDB_ENCOMENDAS}/nome/${encodeURIComponent(enc.nome)}`,
-          {
-            status: "Recebida",
-            recebido_por: recebidoPor,
-          }
-        );
-
-        await enviar(
-          `✅ Recebimento registrado!\n📦 ${enc.nome} — ${enc.local} em ${enc.data}\n📬 Recebido por: ${recebidoPor}`
-        );
         delete estadosUsuarios[idSessao];
+        clearTimeout(timeoutUsuarios[idSessao]);
         break;
-      }
 
       default:
         await enviar("Algo deu errado. Envie '0' para recomeçar.");
         delete estadosUsuarios[idSessao];
+        clearTimeout(timeoutUsuarios[idSessao]);
     }
   } catch (error) {
     console.error("❌ Erro no tratarMensagemEncomendas:", error.message);
