@@ -13,7 +13,8 @@ if (fs.existsSync(lembretesPath)) {
 
 // Expressão regular para interpretar mensagens
 const parseReminder = (message) => {
-  const regex = /me lembre de (.+) (no|em|na|nesse|neste)? (.+) às? (\d{1,2})[:h]?(\d{0,2})?/i;
+  const regex =
+    /me lembre de (.+) (no|em|na|nesse|neste)? (.+) às? (\d{1,2})[:h]?(\d{0,2})?/i;
   const match = message.match(regex);
   if (match) {
     const texto = match[1].trim();
@@ -65,12 +66,14 @@ const carregarLembretes = (sock) => {
 
 // Lógica principal do módulo
 const tratarMensagemLembretes = async (sock, msg) => {
-  const remetente = msg.key.remoteJid;
+  const remetente = msg.key.remoteJid; // JID do remetente (verifica se é privado)
   const body =
-    msg.message?.conversation ||
-    msg.message?.extendedTextMessage?.text ||
-    "";
+    msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
 
+  // Verifica se a mensagem não é de um grupo (somente mensagens privadas)
+  if (remetente.endsWith("@g.us")) return; // Ignora se for de grupo
+
+  // Processa a mensagem para agendar o lembrete
   const reminder = parseReminder(body);
   if (reminder) {
     const data = getNextDate(reminder.dia, reminder.hora, reminder.minuto);
@@ -82,6 +85,7 @@ const tratarMensagemLembretes = async (sock, msg) => {
     salvarLembretes();
     agendarLembrete(data, reminder.texto, remetente, sock);
 
+    // Envia a mensagem de confirmação no privado
     await sock.sendMessage(remetente, {
       text: `✅ Ok! Vou te lembrar de ${reminder.texto} no ${format(
         data,
