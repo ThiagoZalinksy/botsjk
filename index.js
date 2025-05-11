@@ -1,22 +1,15 @@
-const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require("@whiskeysockets/baileys");
+const {
+  default: makeWASocket,
+  useMultiFileAuthState,
+  fetchLatestBaileysVersion,
+  DisconnectReason,
+} = require("@whiskeysockets/baileys");
 const P = require("pino");
 const fs = require("fs");
 const express = require("express");
 
 const { tratarMensagemLavanderia } = require("./lavanderia");
 const { tratarMensagemEncomendas } = require("./encomendas");
-const { tratarMensagemLembretes } = require("./lembretes");
-
-let grupos = { lavanderia: [], encomendas: [] };
-const caminhoGrupos = "grupos.json";
-
-// Carrega grupos previamente registrados
-if (fs.existsSync(caminhoGrupos)) {
-  grupos = JSON.parse(fs.readFileSync(caminhoGrupos, "utf-8"));
-  console.log("✅ Grupos carregados:");
-  console.log("🧺 Lavanderia:", grupos.lavanderia);
-  console.log("📦 Encomendas:", grupos.encomendas);
-}
 
 async function iniciar() {
   const { state, saveCreds } = await useMultiFileAuthState("auth");
@@ -35,72 +28,62 @@ async function iniciar() {
     const msg = messages[0];
     const remetente = msg.key.remoteJid;
 
-    // Ignora mensagens inválidas
-    if (
-      !msg.message ||
-      msg.key.fromMe ||
-      msg.message.protocolMessage ||
-      msg.message.reactionMessage ||
-      !remetente.endsWith("@g.us")
-    ) return;
+    if (!msg.message || !remetente.endsWith("@g.us")) return;
 
     try {
       const metadata = await sock.groupMetadata(remetente);
-      const nomeGrupo = metadata.subject.toLowerCase();
+      const nomeGrupo = metadata.subject.toLowerCase().trim();
 
-      // Registro automático
-      if (
-        nomeGrupo.includes("lavanderia") &&
-        !grupos.lavanderia.includes(remetente) &&
-        !grupos.encomendas.includes(remetente)
-      ) {
-        grupos.lavanderia.push(remetente);
-        console.log("📌 Grupo de lavanderia registrado:", remetente);
-      } else if (
-        nomeGrupo.includes("jk") &&
-        !grupos.encomendas.includes(remetente) &&
-        !grupos.lavanderia.includes(remetente)
-      ) {
-        grupos.encomendas.push(remetente);
-        console.log("📌 Grupo de encomendas registrado:", remetente);
+      const gruposPermitidos = {
+        "pousada jk universitário": "encomendas",
+        "grupo jk teste": "encomendas",
+        "lavanderia jk": "lavanderia",
+        "teste lavanderia 2": "lavanderia"
+      };
+
+      const tipoGrupo = gruposPermitidos[nomeGrupo];
+
+      if (tipoGrupo === "encomendas") {
+        await tratarMensagemEncomendas(sock, msg);
+      } else if (tipoGrupo === "lavanderia") {
+        await tratarMensagemLavanderia(sock, msg);
+      } else {
+        console.log("❌ Ignorado: grupo não autorizado:", nomeGrupo);
       }
-
-      fs.writeFileSync(caminhoGrupos, JSON.stringify(grupos, null, 2));
     } catch (e) {
       console.warn("❌ Erro ao obter metadados do grupo:", e.message);
     }
-
-    console.log("🔔 Mensagem recebida de", remetente);
-
-    try {
-      if (grupos.lavanderia.includes(remetente)) {
-        console.log("💧 Chamando tratarMensagemLavanderia");
-        await tratarMensagemLavanderia(sock, msg);
-      } else if (grupos.encomendas.includes(remetente)) {
-        console.log("📦 Chamando tratarMensagemEncomendas");
-        await tratarMensagemEncomendas(sock, msg);
-      } else {
-        console.log("⏰ Chamando tratarMensagemLembretes");
-        await tratarMensagemLembretes(sock, msg);
-      }
-    } catch (e) {
-      console.error("❗ Erro ao tratar mensagem:", e.message);
-    }
   });
 
-  sock.ev.on("connection.update", ({ connection }) => {
+  sock.ev.on("connection.update", async ({ connection, lastDisconnect }) => {
     if (connection === "open") {
       console.log("✅ Bot conectado ao WhatsApp!");
-    } else if (connection === "close") {
-      console.log("⚠️ Conexão encerrada. Reconectando...");
-      iniciar(); // reconectar automaticamente
+      const chats = await sock.groupFetchAllParticipating();
+      console.log("📋 Lista de grupos:");
+      Object.values(chats).forEach((grupo) => {
+        console.log(`📌 Nome: ${grupo.subject} | JID: ${grupo.id}`);
+      });
+    }
+
+    if (connection === "close") {
+      const reason = lastDisconnect?.error?.output?.statusCode;
+      console.log("⚠️ Conexão encerrada. Motivo:", reason);
+
+      if (reason !== DisconnectReason.loggedOut) {
+        console.log("🔄 Tentando reconectar...");
+        iniciar(); // Recurse para reconectar
+      } else {
+        console.log("🔒 Sessão expirada. Exclua a pasta 'auth' e escaneie o QR novamente.");
+      }
     }
   });
+
+  return sock;
 }
 
 iniciar();
 
-// Web server para manter o Render vivo
+// Web server para manter Render ativo
 const app = express();
 app.get("/", (req, res) => {
   res.send("🤖 Bot WhatsApp rodando com sucesso!");
