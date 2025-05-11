@@ -52,10 +52,10 @@ async function tratarMensagemLavanderia(sock, msg) {
     return;
   }
 
-  // Opção 1: Dicas
+// Opção 1: Dicas
 if (texto === "1") {
   await enviar({ text: "🧼 Dicas de uso: https://youtu.be/2O_PWz-0qic" });
-
+}
 // Opção 2: Info Lavadora
 } else if (texto === "2") {
   await enviar({
@@ -96,7 +96,7 @@ if (texto === "1") {
 }
 
 // Opção 4: Finalizar Lavagem
-} else if (texto === "4") {
+ else if (texto === "4") {
   // Verifica se há uma lavagem ativa e se o remetente é o responsável pela lavagem
   if (!lavagemAtiva || lavagemAtiva.numero !== remetente) {
     await enviar({ text: `⚠️ Nenhuma lavagem ativa ou você não está usando a máquina.` });
@@ -156,7 +156,7 @@ if (texto === "1") {
 }
 
   // Opção 6: Sair da Fila
-  } else if (texto === "6") {
+   else if (texto === "6") {
     const indice = filaDeEspera.indexOf(remetente);
     if (indice === -1) {
       await enviar({ text: `❌ Você 🫵🏻 não está na fila.` });
@@ -239,7 +239,7 @@ if (texto === "1") {
   
 
   // Opção 8: Horário de Funcionamento
-  } else if (texto === "8") {
+   else if (texto === "8") {
     await enviar({ text: "⏰ *Horário de Funcionamento*\n🗓️ Segunda a Domingo\n🕗 Das 07h às 22h" });
 
   // Opção 9: Previsão do Tempo
@@ -259,8 +259,8 @@ if (texto === "1") {
 
 
   // Opção 10: Coleta de Lixo
- // Opção 10: Coleta de Lixo
-} else if (texto === "10" || texto === "🔟") {
+ 
+ else if (texto === "10" || texto === "🔟") {
   await enviar({
     text: "🗑️ *Dias de Coleta de Lixo:*\n\n🗓️ *Terça, Quinta e Sábado*"
   });
