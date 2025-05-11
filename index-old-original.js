@@ -5,7 +5,6 @@ const express = require("express");
 
 const { tratarMensagemLavanderia } = require("./lavanderia");
 const { tratarMensagemEncomendas } = require("./encomendas");
-const { tratarMensagemLembretes } = require("./lembretes");
 
 let grupos = { lavanderia: [], encomendas: [] };
 const caminhoGrupos = "grupos.json";
@@ -80,8 +79,7 @@ async function iniciar() {
         console.log("📦 Chamando tratarMensagemEncomendas");
         await tratarMensagemEncomendas(sock, msg);
       } else {
-        console.log("⏰ Chamando tratarMensagemLembretes");
-        await tratarMensagemLembretes(sock, msg);
+        console.log("🔍 Mensagem de grupo não registrado:", remetente);
       }
     } catch (e) {
       console.error("❗ Erro ao tratar mensagem:", e.message);
