@@ -1,20 +1,60 @@
+const makeWASocket = require("@whiskeysockets/baileys").default;
 const {
-  default: makeWASocket,
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
-  DisconnectReason,
 } = require("@whiskeysockets/baileys");
 const P = require("pino");
-const fs = require("fs");
-const express = require("express");
+const moment = require("moment-timezone");
 
 const { tratarMensagemLavanderia } = require("./lavanderia");
 const { tratarMensagemEncomendas } = require("./encomendas");
 
+// Função para tratar o lembrete
+const parseReminder = (text) => {
+  const regex = /lembrar (.*) no dia (\d{2})\/(\d{2}) às (\d{2}):(\d{2})/i;
+  const match = text.match(regex);
+  if (match) {
+    return {
+      texto: match[1],
+      dia: match[2],
+      mes: match[3],
+      hora: match[4],
+      minuto: match[5],
+    };
+  }
+  return null;
+};
+
+const formatDate = (dia, mes, hora, minuto) => {
+  return moment()
+    .set("date", dia)
+    .set("month", mes - 1) // meses começam em 0
+    .set("hour", hora)
+    .set("minute", minuto)
+    .set("second", 0)
+    .set("millisecond", 0)
+    .toDate();
+};
+
+// Função para salvar os lembretes
+const lembretes = [];
+
+const salvarLembretes = () => {
+  // Aqui você pode implementar o código para salvar os lembretes em um arquivo ou banco de dados
+};
+
+// Função para agendar o lembrete
+const agendarLembrete = (data, texto, destinatario, sock) => {
+  setTimeout(() => {
+    sock.sendMessage(destinatario, {
+      text: `⏰ Lembrete: ${texto}`,
+    });
+  }, data.getTime() - Date.now());
+};
+
 async function iniciar() {
   const { state, saveCreds } = await useMultiFileAuthState("auth");
   const { version } = await fetchLatestBaileysVersion();
-
   const sock = makeWASocket({
     version,
     auth: state,
@@ -28,67 +68,50 @@ async function iniciar() {
     const msg = messages[0];
     const remetente = msg.key.remoteJid;
 
-    if (!msg.message || !remetente.endsWith("@g.us")) return;
+    if (!msg.message || msg.key.fromMe || !sock.user) return;
 
-    try {
-      const metadata = await sock.groupMetadata(remetente);
-      const nomeGrupo = metadata.subject.toLowerCase().trim();
+    // Verifica se a mensagem é de um grupo ou de conversa privada
+    if (!remetente.endsWith("@g.us")) {
+      // Só responde em chats privados
+      const body =
+        msg.message?.conversation ||
+        msg.message?.extendedTextMessage?.text ||
+        "";
 
-      const gruposPermitidos = {
-        "pousada jk universitário": "encomendas",
-        "grupo jk teste": "encomendas",
-        "lavanderia jk": "lavanderia",
-        "teste lavanderia 2": "lavanderia"
-      };
+      const reminder = parseReminder(body);
+      if (reminder) {
+        const data = formatDate(
+          reminder.dia,
+          reminder.mes,
+          reminder.hora,
+          reminder.minuto
+        );
+        lembretes.push({
+          texto: reminder.texto,
+          timestamp: data.getTime(),
+          destinatario: remetente,
+        });
+        salvarLembretes();
+        agendarLembrete(data, reminder.texto, remetente, sock);
 
-      const tipoGrupo = gruposPermitidos[nomeGrupo];
-
-      if (tipoGrupo === "encomendas") {
-        await tratarMensagemEncomendas(sock, msg);
-      } else if (tipoGrupo === "lavanderia") {
-        await tratarMensagemLavanderia(sock, msg);
-      } else {
-        console.log("❌ Ignorado: grupo não autorizado:", nomeGrupo);
-      }
-    } catch (e) {
-      console.warn("❌ Erro ao obter metadados do grupo:", e.message);
-    }
-  });
-
-  sock.ev.on("connection.update", async ({ connection, lastDisconnect }) => {
-    if (connection === "open") {
-      console.log("✅ Bot conectado ao WhatsApp!");
-      const chats = await sock.groupFetchAllParticipating();
-      console.log("📋 Lista de grupos:");
-      Object.values(chats).forEach((grupo) => {
-        console.log(`📌 Nome: ${grupo.subject} | JID: ${grupo.id}`);
-      });
-    }
-
-    if (connection === "close") {
-      const reason = lastDisconnect?.error?.output?.statusCode;
-      console.log("⚠️ Conexão encerrada. Motivo:", reason);
-
-      if (reason !== DisconnectReason.loggedOut) {
-        console.log("🔄 Tentando reconectar...");
-        iniciar(); // Recurse para reconectar
-      } else {
-        console.log("🔒 Sessão expirada. Exclua a pasta 'auth' e escaneie o QR novamente.");
+        await sock.sendMessage(remetente, {
+          text: `✅ Ok! Vou te lembrar de ${reminder.texto} no ${moment(
+            data
+          ).format("dddd [às] HH:mm")}.`,
+        });
       }
     }
-  });
 
-  return sock;
+    // 🔍 Identifique aqui os IDs reais dos grupos:
+    const grupoLavanderia = "1203630xxxxxx@g.us";
+    const grupoEncomendas = "1203630yyyyyy@g.us";
+
+    if (remetente === grupoLavanderia) {
+      await tratarMensagemLavanderia(sock, msg);
+    } else if (remetente === grupoEncomendas) {
+      await tratarMensagemEncomendas(sock, msg);
+    }
+  });
 }
 
 iniciar();
-
-// Web server para manter Render ativo
-const app = express();
-app.get("/", (req, res) => {
-  res.send("🤖 Bot WhatsApp rodando com sucesso!");
-});
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🌐 Servidor web escutando na porta ${PORT}`);
-});
