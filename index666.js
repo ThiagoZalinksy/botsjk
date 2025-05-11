@@ -1,15 +1,15 @@
-
-const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require("@whiskeysockets/baileys");
+const {
+  default: makeWASocket,
+  useMultiFileAuthState,
+  fetchLatestBaileysVersion,
+  DisconnectReason,
+} = require("@whiskeysockets/baileys");
 const P = require("pino");
 const fs = require("fs");
 const express = require("express");
 
 const { tratarMensagemLavanderia } = require("./lavanderia");
 const { tratarMensagemEncomendas } = require("./encomendas");
-
-let grupos = { lavanderia: [], encomendas: [] };
-
-// Carrega grupos previamente registrados
 
 async function iniciar() {
   const { state, saveCreds } = await useMultiFileAuthState("auth");
@@ -24,7 +24,6 @@ async function iniciar() {
 
   sock.ev.on("creds.update", saveCreds);
 
-  
   sock.ev.on("messages.upsert", async ({ messages }) => {
     const msg = messages[0];
     const remetente = msg.key.remoteJid;
@@ -33,8 +32,7 @@ async function iniciar() {
 
     try {
       const metadata = await sock.groupMetadata(remetente);
-      const nomeGrupo = metadata.subject.toLowerCase();
-      const nomeNormalizado = nomeGrupo.trim().toLowerCase();
+      const nomeGrupo = metadata.subject.toLowerCase().trim();
 
       const gruposPermitidos = {
         "pousada jk universitário": "encomendas",
@@ -43,7 +41,7 @@ async function iniciar() {
         "teste lavanderia 2": "lavanderia"
       };
 
-      const tipoGrupo = gruposPermitidos[nomeNormalizado];
+      const tipoGrupo = gruposPermitidos[nomeGrupo];
 
       if (tipoGrupo === "encomendas") {
         await tratarMensagemEncomendas(sock, msg);
@@ -57,23 +55,35 @@ async function iniciar() {
     }
   });
 
-  sock.ev.on("connection.update", async ({ connection }) => {
+  sock.ev.on("connection.update", async ({ connection, lastDisconnect }) => {
     if (connection === "open") {
       console.log("✅ Bot conectado ao WhatsApp!");
-
       const chats = await sock.groupFetchAllParticipating();
       console.log("📋 Lista de grupos:");
-
       Object.values(chats).forEach((grupo) => {
         console.log(`📌 Nome: ${grupo.subject} | JID: ${grupo.id}`);
       });
     }
+
+    if (connection === "close") {
+      const reason = lastDisconnect?.error?.output?.statusCode;
+      console.log("⚠️ Conexão encerrada. Motivo:", reason);
+
+      if (reason !== DisconnectReason.loggedOut) {
+        console.log("🔄 Tentando reconectar...");
+        iniciar(); // Recurse para reconectar
+      } else {
+        console.log("🔒 Sessão expirada. Exclua a pasta 'auth' e escaneie o QR novamente.");
+      }
+    }
   });
+
+  return sock;
 }
 
 iniciar();
 
-// Web server para Render
+// Web server para manter Render ativo
 const app = express();
 app.get("/", (req, res) => {
   res.send("🤖 Bot WhatsApp rodando com sucesso!");
