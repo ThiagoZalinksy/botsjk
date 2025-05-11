@@ -131,7 +131,8 @@ if (texto === "1") {
 }
 
   // Opção 5: Entrar na Fila
-} else if (texto === "5") {
+  
+  else if (texto === "5") {
   if (filaDeEspera.includes(remetente)) {
     const posicao = filaDeEspera.indexOf(remetente) + 1;
     // Menciona o usuário e informa sua posição
