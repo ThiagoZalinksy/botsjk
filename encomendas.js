@@ -1,9 +1,12 @@
+// Para carregar variáveis de ambiente do arquivo .env (em desenvolvimento local)
+require("dotenv").config();
+
 const { google } = require("googleapis");
-const fs = require("fs");
 
 const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
-const CREDENTIALS = JSON.parse(fs.readFileSync("credenciais.json")); // credenciais da conta de serviço
-const SHEET_ID = "1-1or4UJu64CTPE4D7dba0De4UOqqMvUBNf0bgWBtIRo"; // substitua pelo ID da planilha
+const CREDENTIALS = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON); // variável de ambiente com o JSON
+
+const SHEET_ID = "1-1or4UJu64CTPE4D7dba0De4UOqqMvUBNf0bgWBtIRo";
 
 const auth = new google.auth.JWT(
   CREDENTIALS.client_email,
@@ -229,7 +232,6 @@ async function tratarMensagemEncomendas(sock, msg) {
         const recebidoPor = textoUsuario;
         const enc = estado.encomendaSelecionada;
 
-        // ⚠️ Atualizar célula específica na planilha exige índice (não incluso aqui por simplificação)
         await escreverNaSheet(
           [enc.id, enc.nome, enc.data, enc.local, "Recebida", recebidoPor],
           "Histórico"
