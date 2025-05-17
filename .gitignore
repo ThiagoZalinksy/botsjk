@@ -1,5 +1,14 @@
+# Ignora dependências
 node_modules/
-#auth/
+
+# Ignora arquivos de configuração do ambiente
 .env
+
+# Ignora todas as credenciais do Google Cloud
 scenic-bolt-453313-d0-ca86b1c750ff.json
+
+# Ignora possíveis arquivos de chave que você deixou como exemplo
 caminho/para/seu-arquivo.json
+
+# Ignora todos os arquivos de autenticação do WhatsApp Web
+#auth/*.json
