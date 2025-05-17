@@ -70,17 +70,16 @@ async function tratarMensagemEncomendas(sock, msg) {
           });
 
           let resposta = `📦 Encomendas registradas:\n\n`;
-          for (const [nome, encomendas] of Object.entries(agrupado)) {
-            resposta += `👤 ${nome}\n`;
-            encomendas.forEach((e, i) => {
-              resposta += `${i + 1}. 🆔 ${e.id} 🛒 ${e.local} — ${
-                e.data
-              }\n📍 Status: ${e.status}`;
-              if (e.recebido_por)
-                resposta += `\n📬 Recebido por: ${e.recebido_por}`;
-              resposta += `\n\n`;
-            });
-          }
+for (const [nome, encomendas] of Object.entries(agrupado)) {
+  resposta += `👤 ${nome}\n`;
+  encomendas.forEach((e) => {
+    resposta += `🆔 ${e.id} 🛒 ${e.local} — ${e.data}\n📍 Status: ${e.status}`;
+    if (e.recebido_por)
+      resposta += `\n📬 Recebido por: ${e.recebido_por}`;
+    resposta += `\n\n`;
+  });
+}
+
 
           await enviar(resposta.trim());
           delete estadosUsuarios[idSessao];
@@ -152,7 +151,7 @@ async function tratarMensagemEncomendas(sock, msg) {
         const encomenda = data.find((e) => e.id === estado.idConfirmar);
 
         if (!encomenda || encomenda.status !== "Aguardando Recebimento") {
-          await enviar("❌ ID inválido ou encomenda já recebida.");
+          await enviar("❌ ID inválido ou encomenda já recebida, retorne no menu digitando 0 e consultando na opção 2.");
           delete estadosUsuarios[idSessao];
           return;
         }
