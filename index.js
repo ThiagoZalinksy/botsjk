@@ -6,7 +6,6 @@ const {
 } = require("@whiskeysockets/baileys");
 
 const P = require("pino");
-const fs = require("fs");
 const express = require("express");
 const axios = require("axios");
 const QRCode = require("qrcode");
@@ -15,18 +14,8 @@ const { tratarMensagemLavanderia } = require("./lavanderia");
 const { tratarMensagemEncomendas } = require("./encomendas");
 
 let sock; // 🔄 conexão global
-let grupos = { lavanderia: [], encomendas: [] };
-const caminhoGrupos = "grupos.json";
 let reconectando = false;
 let qrCodeAtual = null; // 📱 QR code atual para exibir na web
-
-// Carrega grupos registrados
-if (fs.existsSync(caminhoGrupos)) {
-  grupos = JSON.parse(fs.readFileSync(caminhoGrupos, "utf-8"));
-  console.log("✅ Grupos carregados:");
-  console.log("🧺 Lavanderia:", grupos.lavanderia);
-  console.log("📦 Encomendas:", grupos.encomendas);
-}
 
 async function iniciar() {
   // 🔌 Finaliza instância anterior, se existir
@@ -52,6 +41,7 @@ async function iniciar() {
 
   sock.ev.on("creds.update", saveCreds);
 
+  // 📩 Recebendo mensagens
   sock.ev.on("messages.upsert", async ({ messages }) => {
     const msg = messages[0];
     const remetente = msg.key.remoteJid;
@@ -64,56 +54,18 @@ async function iniciar() {
       !remetente.endsWith("@g.us")
     ) return;
 
-    try {
-      const metadata = await sock.groupMetadata(remetente);
-      const nomeGrupo = metadata.subject.toLowerCase();
-
-      if (
-        nomeGrupo.includes("lavanderia") &&
-        !grupos.lavanderia.includes(remetente) &&
-        !grupos.encomendas.includes(remetente)
-      ) {
-        grupos.lavanderia.push(remetente);
-        console.log("📌 Grupo de lavanderia registrado:", remetente);
-      } else if (
-        nomeGrupo.includes("jk") &&
-        !grupos.encomendas.includes(remetente) &&
-        !grupos.lavanderia.includes(remetente)
-      ) {
-        grupos.encomendas.push(remetente);
-        console.log("📌 Grupo de encomendas registrado:", remetente);
-      }
-
-      fs.writeFileSync(caminhoGrupos, JSON.stringify(grupos, null, 2));
-    } catch (e) {
-      console.warn("❌ Erro ao obter metadados do grupo:", e.message);
-    }
-
     console.log("🔔 Mensagem recebida de", remetente);
 
-    //try {
-      //if (grupos.lavanderia.includes(remetente)) {
-        //console.log("💧 Chamando tratarMensagemLavanderia");
-       // await tratarMensagemLavanderia(sock, msg);
-     // } else if (grupos.encomendas.includes(remetente)) {
-    // console.log("📦 Chamando tratarMensagemEncomendas");
-     //   await tratarMensagemEncomendas(sock, msg);
-     // } else {
-       // console.log("🔍 Mensagem de grupo não registrado:", remetente);
-     // }
-   // } catch (e) {
-     // console.error("❗ Erro ao tratar mensagem:", e.message);
-   // }// 🔓 Deixa qualquer grupo usar os módulos
-  //});
     try {
-  await tratarMensagemLavanderia(sock, msg);
-  await tratarMensagemEncomendas(sock, msg);
-} catch (e) {
-  console.error("❗ Erro ao tratar mensagem:", e.message);
-}
+      // 🔓 Agora qualquer grupo pode usar os módulos
+      await tratarMensagemLavanderia(sock, msg);
+      await tratarMensagemEncomendas(sock, msg);
+    } catch (e) {
+      console.error("❗ Erro ao tratar mensagem:", e.message);
+    }
+  });
 
-
-  // 🔔 Detecta entrada/saída de participantes no grupo
+  // 👥 Boas-vindas e despedida
   sock.ev.on("group-participants.update", async (update) => {
     try {
       const metadata = await sock.groupMetadata(update.id);
@@ -123,14 +75,12 @@ async function iniciar() {
         const dataHora = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
 
         if (update.action === "add") {
-          // ✅ Mensagem de boas-vindas
           await sock.sendMessage(update.id, {
-            text: `👋 Olá @${numero}!\n\nSeja bem-vindo(a) ao grupo *${metadata.subject}* 🎉\n\nDigite *menu* para ver as opções.`,
+            text: `👋 Olá @${numero}!\n\nSeja bem-vindo(a) ao grupo *${metadata.subject}* 🎉\n\nDigite *menu* para lavanderia ou *0* para encomendas.`,
             mentions: [participante],
           });
           console.log(`✅ Novo integrante no grupo ${metadata.subject}: ${numero}`);
 
-          // Salva no SheetDB
           await axios.post("https://sheetdb.io/api/v1/7x5ujfu3x3vyb", {
             data: [
               { usuario: `@${numero}`, mensagem: "Entrou no grupo", dataHora }
@@ -138,14 +88,12 @@ async function iniciar() {
           });
 
         } else if (update.action === "remove") {
-          // ❌ Mensagem de despedida
           await sock.sendMessage(update.id, {
             text: `👋 @${numero} saiu do grupo *${metadata.subject}*`,
             mentions: [participante],
           });
           console.log(`ℹ️ Integrante saiu do grupo ${metadata.subject}: ${numero}`);
 
-          // Salva no SheetDB
           await axios.post("https://sheetdb.io/api/v1/7x5ujfu3x3vyb", {
             data: [
               { usuario: `@${numero}`, mensagem: "Saiu do grupo", dataHora }
@@ -183,11 +131,11 @@ async function iniciar() {
         await iniciar(); // 🔁 reconecta com nova sessão
       } else {
         console.log("❌ Sessão encerrada. Escaneie o QR novamente.");
-        qrCodeAtual = null; // Limpa QR code quando sessão encerra
+        qrCodeAtual = null;
       }
     } else if (connection === "open") {
       reconectando = false;
-      qrCodeAtual = null; // Limpa QR code quando conecta
+      qrCodeAtual = null;
       console.log("✅ Bot conectado ao WhatsApp!");
     }
   });
@@ -196,7 +144,7 @@ async function iniciar() {
 // ▶️ Inicia o bot
 iniciar();
 
-// 🌐 Web server (UptimeRobot / Ping)
+// 🌐 Servidor web para status e QR code
 const app = express();
 
 app.get("/", (req, res) => {
@@ -232,86 +180,28 @@ app.get("/", (req, res) => {
 
 app.get("/qr", (req, res) => {
   if (qrCodeAtual) {
-    const html = `
+    res.send(`
       <!DOCTYPE html>
       <html lang="pt-BR">
       <head>
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <title>QR Code - WhatsApp Bot</title>
-          <style>
-              body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background: #f0f0f0; }
-              .container { max-width: 400px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-              .qr-code { margin: 20px 0; }
-              .qr-code img { border: 10px solid #25D366; border-radius: 10px; }
-              .instructions { margin: 20px 0; color: #666; line-height: 1.6; }
-              .refresh-btn { display: inline-block; margin: 20px 0; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; }
-              .refresh-btn:hover { background: #0056b3; }
-          </style>
-          <script>
-              // Auto-refresh a cada 30 segundos
-              setTimeout(() => window.location.reload(), 30000);
-          </script>
       </head>
-      <body>
-          <div class="container">
-              <h1>📱 QR Code WhatsApp</h1>
-              <div class="qr-code">
-                  <img src="${qrCodeAtual}" alt="QR Code" />
-              </div>
-              <div class="instructions">
-                  <strong>Como conectar:</strong><br>
-                  1. Abra o WhatsApp no seu celular<br>
-                  2. Vá em "Dispositivos Conectados"<br>
-                  3. Toque em "Conectar um dispositivo"<br>
-                  4. Escaneie este QR code
-              </div>
-              <a href="/qr" class="refresh-btn">🔄 Atualizar QR Code</a>
-              <br>
-              <a href="/">← Voltar ao Status</a>
-          </div>
+      <body style="text-align:center;font-family:Arial;padding:20px;">
+          <h1>📱 QR Code WhatsApp</h1>
+          <img src="${qrCodeAtual}" alt="QR Code" style="border:10px solid #25D366;border-radius:10px;" />
+          <p>Abra o WhatsApp → Dispositivos Conectados → Conectar um dispositivo</p>
+          <a href="/qr">🔄 Atualizar</a>
+          <br><a href="/">← Voltar</a>
       </body>
       </html>
-    `;
-    res.send(html);
+    `);
   } else {
-    const html = `
-      <!DOCTYPE html>
-      <html lang="pt-BR">
-      <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>QR Code - WhatsApp Bot</title>
-          <style>
-              body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background: #f0f0f0; }
-              .container { max-width: 400px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-              .message { margin: 20px 0; color: #666; }
-              .refresh-btn { display: inline-block; margin: 20px 0; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; }
-              .refresh-btn:hover { background: #0056b3; }
-          </style>
-          <script>
-              // Auto-refresh a cada 5 segundos
-              setTimeout(() => window.location.reload(), 5000);
-          </script>
-      </head>
-      <body>
-          <div class="container">
-              <h1>📱 QR Code WhatsApp</h1>
-              <div class="message">
-                  ✅ Bot já está conectado!<br><br>
-                  Ou aguardando geração do QR code...<br>
-                  <small>Esta página atualiza automaticamente</small>
-              </div>
-              <a href="/qr" class="refresh-btn">🔄 Verificar Novamente</a>
-              <br>
-              <a href="/">← Voltar ao Status</a>
-          </div>
-      </body>
-      </html>
-    `;
-    res.send(html);
+    res.send("<h2>✅ Bot já conectado ou aguardando geração do QR code...</h2>");
   }
 });
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🌐 Servidor web escutando na porta ${PORT}`);
