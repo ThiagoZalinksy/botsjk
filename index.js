@@ -17,15 +17,14 @@ let sock;
 let reconectando = false;
 let qrCodeAtual = null;
 
-// 🔄 Função principal
+// 🚀 Início da função principal
 async function iniciar() {
-  // encerra sessão anterior se houver
   if (sock?.ev) {
     try {
       await sock.logout();
       console.log("🧹 Sessão anterior encerrada.");
     } catch (err) {
-      console.warn("⚠️ Erro ao encerrar sessão anterior:", err.message);
+      console.warn("⚠️ Falha ao encerrar sessão anterior:", err.message);
     }
   }
 
@@ -42,7 +41,7 @@ async function iniciar() {
 
   sock.ev.on("creds.update", saveCreds);
 
-  // 📩 mensagens recebidas
+  // 📩 Mensagens recebidas
   sock.ev.on("messages.upsert", async ({ messages }) => {
     const msg = messages[0];
     const remetente = msg.key.remoteJid;
@@ -70,32 +69,38 @@ async function iniciar() {
     }
   });
 
-  // 👥 boas-vindas e saídas
+  // 👥 Entrada e saída de membros (boas-vindas global)
   sock.ev.on("group-participants.update", async (update) => {
     try {
       const metadata = await sock.groupMetadata(update.id);
+      const nomeGrupo = metadata.subject;
       for (let participante of update.participants) {
         const numero = participante.split("@")[0];
         const dataHora = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
 
         if (update.action === "add") {
+          // ✨ Boas-vindas personalizada
           await sock.sendMessage(update.id, {
-            text: `👋 Olá @${numero}! Seja bem-vindo(a) ao grupo *${metadata.subject}* 🎉\n\nDigite *menu* ou *0* para começar.`,
+            text: `👋 Olá @${numero}! Seja bem-vindo(a) ao grupo *${nomeGrupo}* 🎉\n\nDigite *menu* para acessar o sistema de lavanderia 🧺 ou *0* para acessar o sistema de encomendas 📦.`,
             mentions: [participante],
           });
+          console.log(`✅ Novo integrante no grupo ${nomeGrupo}: ${numero}`);
 
+          // Registra no SheetDB
           await axios.post("https://sheetdb.io/api/v1/7x5ujfu3x3vyb", {
-            data: [{ usuario: `@${numero}`, mensagem: "Entrou no grupo", dataHora }]
+            data: [{ usuario: `@${numero}`, mensagem: `Entrou em ${nomeGrupo}`, dataHora }]
           });
 
         } else if (update.action === "remove") {
+          // 📴 Despedida
           await sock.sendMessage(update.id, {
-            text: `👋 @${numero} saiu do grupo *${metadata.subject}*`,
+            text: `👋 @${numero} saiu do grupo *${nomeGrupo}*`,
             mentions: [participante],
           });
+          console.log(`ℹ️ Integrante saiu do grupo ${nomeGrupo}: ${numero}`);
 
           await axios.post("https://sheetdb.io/api/v1/7x5ujfu3x3vyb", {
-            data: [{ usuario: `@${numero}`, mensagem: "Saiu do grupo", dataHora }]
+            data: [{ usuario: `@${numero}`, mensagem: `Saiu de ${nomeGrupo}`, dataHora }]
           });
         }
       }
@@ -104,7 +109,7 @@ async function iniciar() {
     }
   });
 
-  // 🔄 controle de conexão
+  // 🔄 Conexão e reconexão
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect, qr } = update;
 
@@ -137,18 +142,19 @@ async function iniciar() {
   });
 }
 
-// ▶️ iniciar
+// ▶️ Iniciar
 iniciar();
 
-// 🌐 servidor web
+// 🌐 Servidor web para status e QR
 const app = express();
 
 app.get("/", (_, res) => {
   res.send(`
     <html><head><meta charset="utf-8"/><title>Bot Status</title></head>
-    <body style="font-family:sans-serif;text-align:center;padding:40px;">
-      <h1>🤖 WhatsApp Bot</h1>
+    <body style="font-family:sans-serif;text-align:center;padding:40px;background:#f0f0f0;">
+      <h1>🤖 WhatsApp Bot Universal</h1>
       <p>Status: <b>Rodando com sucesso!</b></p>
+      <p>O bot responde automaticamente em qualquer grupo conectado.</p>
       <a href="/qr" style="display:inline-block;background:#25D366;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;">📱 Ver QR Code</a>
     </body></html>
   `);
@@ -156,11 +162,20 @@ app.get("/", (_, res) => {
 
 app.get("/qr", (_, res) => {
   if (qrCodeAtual) {
-    res.send(`<html><body style="text-align:center"><h1>QR Code</h1><img src="${qrCodeAtual}" /><p>Escaneie com o WhatsApp</p><a href="/">Voltar</a></body></html>`);
+    res.send(`
+      <html><body style="text-align:center;font-family:sans-serif;padding:30px;">
+        <h1>📱 QR Code WhatsApp</h1>
+        <img src="${qrCodeAtual}" style="border:10px solid #25D366;border-radius:10px"/>
+        <p>Abra o WhatsApp → Dispositivos Conectados → Conectar um dispositivo</p>
+        <a href="/">← Voltar</a>
+      </body></html>
+    `);
   } else {
-    res.send("<h2>✅ Bot já conectado ou aguardando QR...</h2>");
+    res.send("<h2>✅ Bot já conectado ou aguardando novo QR...</h2>");
   }
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, "0.0.0.0", () => console.log(`🌐 Servidor rodando na porta ${PORT}`));
+app.listen(PORT, "0.0.0.0", () =>
+  console.log(`🌐 Servidor web rodando na porta ${PORT}`)
+);
